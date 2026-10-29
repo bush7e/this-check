@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ค่าอินเทอร์เน็ต 3BB: สถานะรายเดือน</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="style.css?v=20261026t">
+  <!-- อ่านไฟล์ Excel (data.xlsx) -->
+  <script src="config.js"></script>
+  <script src="xlsx.full.min.js"></script>
+  <!-- สำรอง: ถ้าไฟล์ในเครื่องหาย ให้ลองโหลดจาก CDN -->
+  <script>window.XLSX || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');</script>
+</head>
+<body>
+
+  <!-- ===================== หน้าจอหลัก ===================== -->
+  <div class="wrap">
+    <header class="hero">
+      <img class="hero-logo" src="logo.png" alt="KI">
+      <div>
+        <p class="hero-co">บริษัท น้ำตาลสุรินทร์ จำกัด</p>
+        <h1>🧾 ค่าอินเทอร์เน็ต 3BB: ค้นหาศูนย์และดูสถานะรายเดือน</h1>
+        <p class="hero-sub">เลือกรายชื่อ &rarr; ตรวจยอดรายเดือน &rarr; พิมพ์ใบเบิก</p>
+      </div>
+    </header>
+
+    <!-- บทบาท: ผู้อนุมัติ 1 / ผู้อนุมัติ 2 / บัญชี -->
+    <div class="card login">
+      <div id="loginBox">
+        <label>เข้าสู่ระบบตามบทบาท (ไม่บังคับ ถ้าแค่ค้นหาและพิมพ์ใบเบิก)</label>
+        <div class="search-row">
+          <select id="roleSel"><option value="">-- เลือกบทบาท --</option></select>
+          <input id="pinIn" type="password" inputmode="numeric" placeholder="รหัส PIN">
+          <button id="loginBtn">เข้าสู่ระบบ</button>
+        </div>
+      </div>
+      <div id="whoBox" class="who" style="display:none;">
+        <span>เข้าสู่ระบบเป็น <b id="whoName"></b></span>
+        <button id="logoutBtn" class="alt">ออกจากระบบ</button>
+      </div>
+    </div>
+
+    <!-- เครื่องมือจัดการข้อมูล (ไม่บังคับ) -->
+    <div class="card tools" id="toolsCard">
+      <div class="tools-bar">
+        <button type="button" class="alt tool-btn" id="addTog" aria-expanded="false" aria-controls="addBox">➕ เพิ่มข้อมูลใหม่</button>
+        <button type="button" class="alt tool-btn" id="upTog" aria-expanded="false" aria-controls="upBox">📁 อัปโหลดไฟล์ Excel</button>
+        <button type="button" class="alt tool-btn" id="helpBtn">❓ วิธีใช้</button>
+      </div>
+      <div class="tool-panel" id="addBox" hidden>
+        <div class="add-body">
+          <div class="fld add-kind">
+            <label for="addKind">เรื่องที่จะเพิ่ม</label>
+            <select id="addKind" aria-label="เลือกเรื่องที่จะเพิ่มข้อมูล">
+              <option value="net">ค่าอินเทอร์เน็ต 3BB</option>
+              <option value="phone">ค่าโทรศัพท์</option>
+            </select>
+          </div>
+          <div class="fgrid">
+            <div class="fld" id="fldName"><label id="lName"></label><input id="addName" autocomplete="off"></div>
+            <div class="fld"><label id="lK1"></label><input id="addK1" autocomplete="off"></div>
+            <div class="fld" id="fK2"><label id="lK2"></label><input id="addK2" autocomplete="off"></div>
+            <div class="fld" id="fEx"><label>ระบบ</label><input id="addEx" value="TRUE" autocomplete="off"></div>
+            <div class="fld">
+              <label>เดือน</label>
+              <select id="addMonth" class="pick"></select>
+              <input id="addMonthNew" placeholder="พิมพ์ชื่อเดือนใหม่ เช่น ธันวาคม" style="display:none; margin-top:6px;">
+            </div>
+            <div class="fld"><label>กำหนดชำระ</label><input id="addDue" type="date"></div>
+            <div class="fld"><label>ค่าบริการ (บาท)</label><input id="addAmt" type="number" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="fld" id="fPer"><label>รอบค่าบริการ (ไม่บังคับ)</label><input id="addPer" placeholder="เช่น 01/10/69-31/10/69"></div>
+          </div>
+
+          <div id="billFormBox" style="display:none;">
+            <label class="chk"><input type="checkbox" id="billOn"> ใส่รายละเอียดใบแจ้งค่าบริการ (ระบบคำนวณภาษีและยอดรวมให้)</label>
+            <div id="billForm" style="display:none;">
+              <div class="fgrid">
+                <div class="fld"><label>ค่าบริการแพ็กเกจหลัก</label><input id="billMain" type="number" step="0.01" min="0" inputmode="decimal"></div>
+              </div>
+              <div class="sec-title">ค่าบริการส่วนเกิน (ไม่มีก็เว้นว่าง)</div>
+              <div id="billItems"></div>
+              <button type="button" id="billAdd" class="alt">+ เพิ่มรายการ</button>
+              <div class="bill-sum" id="billSum"></div>
+            </div>
+          </div>
+
+          <div class="up-row">
+            <button type="button" id="addSave">💾 บันทึกข้อมูล</button>
+          </div>
+          <div id="addMsg" class="up-status"></div>
+          <div class="note">ใช้ได้ทั้งเพิ่มรายการใหม่ และเพิ่ม/แก้ยอดของเดือนในรายการเดิม ข้อมูลเก็บไว้ในเครื่องนี้ ถ้าต้องการให้ทุกคนเห็น กด "⬇️ ดาวน์โหลดไฟล์ปัจจุบัน" แล้วอัปโหลดทับบน GitHub</div>
+        </div>
+      </div>
+
+      <div class="tool-panel" id="upBox" hidden>
+        <div class="up-body">
+          <div class="note" id="upFor"></div>
+          <div class="up-row">
+            <label class="up-btn" for="xlsFile">📁 เลือกไฟล์ Excel (.xlsx)</label>
+            <input id="xlsFile" type="file" accept=".xlsx,.xls" hidden>
+            <button id="xlsClear" type="button" class="alt" style="display:none;">ล้าง กลับไปใช้ไฟล์บนเว็บ</button>
+            <button id="xlsDown" type="button" class="alt">⬇️ ดาวน์โหลดไฟล์ปัจจุบัน (.xlsx)</button>
+          </div>
+          <label class="up-merge"><input type="checkbox" id="upMerge" checked> รวมกับข้อมูลเดิม (ข้อมูลเก่าไม่หาย) — เอาเครื่องหมายออกถ้าต้องการแทนที่ทั้งหมด</label>
+          <div id="upStatus" class="up-status"></div>
+          <div class="note">ไฟล์ต้องมีหัวคอลัมน์เหมือนไฟล์ตัวอย่าง (data.xlsx / phone.xlsx) ข้อมูลที่เพิ่มจะใช้และเก็บไว้ในเครื่องนี้เท่านั้น ถ้าต้องการให้ทุกคนเห็นเหมือนกัน ให้อัปโหลดไฟล์ทับบนเว็บ</div>
+        </div>
+      </div>
+    </div>
+
+    <dialog id="ghDlg" class="dlg" aria-labelledby="ghTtl">
+      <h2 id="ghTtl">☁️ อัปเดตขึ้นเว็บ (GitHub)</h2>
+      <p class="m-sub">ส่งไฟล์ข้อมูลล่าสุดขึ้น GitHub ให้โดยตรง แล้ว GitHub Pages จะอัปเดตเว็บให้ทุกคนเห็นภายใน 1-2 นาที ต้องใช้ <b>โทเคนของ GitHub</b> (สร้างครั้งเดียว)</p>
+      <ol>
+        <li>GitHub → รูปโปรไฟล์ → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b></li>
+        <li><b>Repository access:</b> Only select repositories → เลือกเฉพาะ repo ของเว็บนี้</li>
+        <li><b>Permissions → Contents:</b> Read and write</li>
+        <li>กด Generate แล้วคัดลอกโทเคนมาวางด้านล่าง (ห้ามส่งให้ผู้อื่น)</li>
+      </ol>
+      <label for="ghTok">โทเคน</label>
+      <input id="ghTok" type="password" autocomplete="off" placeholder="github_pat_...">
+      <label class="up-merge"><input type="checkbox" id="ghRemember"> จำโทเคนไว้ในเครื่องนี้ (ไม่ต้องใส่ซ้ำ)</label>
+      <div class="dlg-foot dlg-foot2"><button type="button" class="alt" id="ghNo">ยกเลิก</button><button type="button" id="ghOk">บันทึกโทเคนและส่งขึ้นเว็บ</button></div>
+    </dialog>
+
+    <dialog id="mergeDlg" class="dlg" aria-labelledby="mergeTtl">
+      <h2 id="mergeTtl">ตรวจสอบก่อนรวมข้อมูล</h2>
+      <div id="mergeBody"></div>
+      <div class="dlg-foot dlg-foot2"><button type="button" class="alt" id="mergeNo">ยกเลิก</button><button type="button" id="mergeOk">ยืนยันรวมข้อมูล</button></div>
+    </dialog>
+
+    <dialog id="helpDlg" class="dlg" aria-labelledby="helpTtl">
+      <h2 id="helpTtl">❓ วิธีใช้งาน</h2>
+      <h3>เบิกทุกเดือน (3 ขั้นตอน)</h3>
+      <ol>
+        <li><b>เลือกเรื่องและรายชื่อ</b> เลือกอินเทอร์เน็ตหรือโทรศัพท์ แล้วเลือกศูนย์/เบอร์ หรือกดชื่อจากรายการ "ยังไม่จ่าย" ในการ์ดสรุป</li>
+        <li><b>ตรวจสถานะรายเดือน</b> ดูว่าเดือนไหนจ่ายแล้ว แล้วกดการ์ดเดือนที่ต้องการเบิก</li>
+        <li><b>ตรวจข้อมูลแล้วพิมพ์</b> เช็กผู้จัดทำ ผู้อนุมัติ วันที่ แล้วกด "Print บันทึกภายใน"</li>
+      </ol>
+      <h3>ผู้ดูแลข้อมูล</h3>
+      <ul>
+        <li><b>➕ เพิ่มข้อมูลใหม่</b> กรอกเบอร์/ศูนย์ เดือน วันที่ ยอด (ใส่รายละเอียดบิลโทรศัพท์ได้) แล้วกดบันทึก</li>
+        <li><b>ให้ทุกคนเห็นข้อมูลที่เพิ่ม</b> กด "⬇️ ดาวน์โหลด" ได้ไฟล์ Excel ใหม่ แล้ววางทับไฟล์เดิมบนเว็บ</li>
+        <li><b>📁 อัปโหลดไฟล์ Excel</b> หรือ <b>ลากไฟล์ .xlsx มาวางบนหน้าเว็บ</b> ข้อมูลในไฟล์ใหม่จะ <b>รวมเข้ากับข้อมูลเดิมทันที</b> (ศูนย์/เบอร์ที่มีอยู่จะอัปเดตเฉพาะช่องที่ไฟล์ใหม่กรอกไว้ ข้อมูลเก่าไม่หาย)</li>
+        <li><b>☁️ อัปเดตขึ้นเว็บ</b> (ในแถบเหลือง) ส่งไฟล์ขึ้น GitHub โดยตรง ทุกคนเห็นข้อมูลใหม่ภายใน 1-2 นาที (ต้องตั้งโทเคนครั้งแรก)</li>
+        <li><b>💾 บันทึกลงไฟล์</b> (ในแถบเหลือง ใช้ได้ใน Chrome/Edge) เขียนข้อมูลลงไฟล์ในโฟลเดอร์ของคุณโดยตรง ไม่ต้องดาวน์โหลดแล้ววางทับเอง</li>
+      </ul>
+      <h3>ควรรู้</h3>
+      <ul>
+        <li>ในไฟล์ Excel ช่องค่าบริการ <b>มีตัวเลข = จ่ายแล้ว</b> ว่าง = ยังไม่จ่าย</li>
+        <li>แถบเหลือง "แสดงข้อมูลในเครื่องนี้" แปลว่ายังไม่ใช่ไฟล์จริงของทุกคน กด "กลับไปใช้ไฟล์บนเว็บ" เมื่อใช้ทดลองเสร็จ</li>
+        <li>เข้าสู่ระบบด้านบนเฉพาะเมื่อต้องอนุมัติ/บันทึกจ่ายเงิน (ค้นหาและพิมพ์ใบเบิกไม่ต้องเข้าสู่ระบบ)</li>
+        <li>หน้าเว็บไม่เปลี่ยนหลังอัปโหลดไฟล์ใหม่ ให้กด Ctrl+F5</li>
+      </ul>
+      <div class="dlg-foot"><button type="button" id="helpClose">เข้าใจแล้ว</button></div>
+    </dialog>
+
+    <div id="localBanner" class="banner warn local-banner" style="display:none;"></div>
+
+    <div id="syncBar" class="banner local-banner" style="display:none;"></div>
+
+    <!-- สรุปภาพรวมรายเดือน (สร้างจากข้อมูล Excel) -->
+    <div class="card summary" id="summary" style="display:none;">
+      <div class="sum-head">
+        <span class="sum-title">📊 สรุปภาพรวม</span>
+        <div class="sum-ctrl">
+          <select id="sumKind" aria-label="เลือกเรื่องที่จะสรุป">
+            <option value="net">ค่าอินเทอร์เน็ต 3BB</option>
+            <option value="phone">ค่าโทรศัพท์</option>
+          </select>
+          <select id="sumMonth" aria-label="เลือกเดือนที่จะสรุป"></select>
+        </div>
+      </div>
+      <div id="sumBody"></div>
+    </div>
+
+    <!-- ส่วนที่ 1: เลือกเรื่อง และเลือกรายชื่อ (หรือพิมพ์ค้นหา) -->
+    <div class="card">
+      <div class="step"><span class="step-no">1</span><span>เลือกเรื่องและรายชื่อ</span></div>
+      <label>เลือกเรื่องที่จะเบิก</label>
+      <select id="kindSel" class="pick">
+        <option value="net">ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB</option>
+        <option value="phone">ขอเบิกค่าใช้บริการโทรศัพท์</option>
+      </select>
+
+      <label id="itemLabel">เลือกรายชื่อ</label>
+      <select id="itemSel" class="pick"></select>
+
+      <details class="more">
+      <summary>หรือพิมพ์ค้นหาด้วยรหัส / หมายเลข</summary>
+
+      <div id="searchNet">
+        <div class="search-row">
+          <input id="accIn" inputmode="numeric" placeholder="รหัสลูกค้า เช่น 410443826">
+          <button id="accBtn" class="alt">ค้นหา</button>
+        </div>
+        <div class="search-row">
+          <input id="svcIn" placeholder="หมายเลขบริการ เช่น A212119700542">
+          <button id="svcBtn" class="alt">ค้นหา</button>
+        </div>
+      </div>
+
+      <div id="searchPhone">
+        <div class="search-row">
+          <input id="telIn" inputmode="tel" placeholder="หมายเลขโทรศัพท์ เช่น 097-3378822">
+          <button id="telBtn" class="alt">ค้นหา</button>
+        </div>
+      </div>
+      </details>
+
+      <div id="msg"></div>
+    </div>
+
+    <!-- ส่วนที่ 2: ผลลัพธ์ (ซ่อนจนกว่าจะค้นหาเจอ) -->
+    <div id="result" class="card">
+      <div class="step"><span class="step-no">2</span><span>ตรวจสถานะรายเดือน</span></div>
+      <div class="center-head">
+        <span id="cName" class="center-name"></span>
+        <span id="cBadge"></span>
+      </div>
+      <div id="cMeta" class="center-meta"></div>
+      <div id="cBanner"></div>
+
+      <!-- ใบแจ้งค่าบริการ (เฉพาะโทรศัพท์) แสดงก่อนสถานะรายเดือน -->
+      <div id="billBox" class="bill"></div>
+
+      <div class="sec-title">สถานะการชำระรายเดือน (จาก Excel)</div>
+      <div id="mGrid" class="mgrid"></div>
+      <div id="mHint" class="m-hint"></div>
+
+      <!-- รายละเอียดของเดือนที่เลือก + พิมพ์ใบเบิก -->
+      <div id="detail">
+        <div class="step step3"><span class="step-no">3</span><span>ตรวจข้อมูลแล้วพิมพ์</span></div>
+        <div id="tTitle" class="ttl"></div>
+
+        <div class="tw">
+          <table class="tb">
+            <thead>
+              <tr id="tHead"></tr>
+            </thead>
+            <tbody>
+              <tr id="tRow" class="hl"></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="fgrid">
+          <div class="fld">
+            <label>รอบเดือน</label>
+            <input id="period">
+          </div>
+          <div class="fld">
+            <label>วันที่ในบันทึกภายใน</label>
+            <input id="memoDate" type="date">
+          </div>
+          <div class="fld">
+            <label>ผู้จัดทำ</label>
+            <select id="makerSel" class="pick"></select>
+            <div id="makerPosTxt" class="pos-txt"></div>
+          </div>
+          <div class="fld">
+            <label>ผู้อนุมัติ</label>
+            <select id="apprSel" class="pick"></select>
+            <div id="apprPosTxt" class="pos-txt"></div>
+          </div>
+        </div>
+
+        <div class="appr-panel">
+          <div class="appr-title">สถานะการอนุมัติ (ผู้อนุมัติ 2 คน + บัญชี)</div>
+          <div id="apprGrid"></div>
+          <div id="apprActions"></div>
+        </div>
+
+        <div class="print-bar">
+          <button id="printMemo" class="btn-print">🖨️ Print บันทึกภายใน</button>
+          <button id="printBtn" class="btn-print alt">🖨️ Print รายงานการขอเบิกค่าใช้จ่าย (แบบเดิม)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note foot">
+      <div>เวอร์ชันหน้าเว็บ 26-10-69 t</div>
+      ข้อมูลอ่านจากไฟล์ Excel: data.xlsx (อินเตอร์เน็ต 3BB) และ phone.xlsx (โทรศัพท์) · แก้ไขใน Excel แล้วอัปโหลดทับ เว็บจะแสดงข้อมูลใหม่ให้อัตโนมัติ
+    </div>
+  </div>
+
+  <!-- ===================== ใบรายงานการขอเบิกค่าใช้จ่าย (ใช้พิมพ์) ===================== -->
+  <div id="form">
+    <div class="pf">
+
+      <!-- หัวใบ -->
+      <div class="pf-head">
+        <div class="pf-head-l">
+          <div class="pf-title">รายงานการขอเบิกค่าใช้จ่าย</div>
+          <div class="pf-period">ประจำรอบเดือน <span id="fPeriod"></span></div>
+          <div class="pf-term">งวดที่ <span class="cb"></span> 1-15 <span class="cb cb2"></span> 16-31</div>
+        </div>
+        <div class="pf-head-r">
+          <img class="pf-logo" src="logo.png" alt="KI">
+          <div class="pf-co">บริษัท น้ำตาลสุรินทร์ จำกัด</div>
+        </div>
+      </div>
+
+      <div class="pf-dept">ฝ่ายจัดหาวัตถุดิบ</div>
+
+      <!-- สำนักงาน -->
+      <div class="pf-cols pf-h"><div><u>สำนักงาน</u></div><div></div></div>
+      <div class="pf-cols pf-r">
+        <div class="sp"><span>ค่าอินเทอร์เน็ต<span id="fName"></span> (3BB)</span><span><span id="fAmt"></span> บาท</span></div>
+        <div>ค่าอินเทอร์เน็ต บาท</div>
+      </div>
+      <div class="pf-cols pf-r"><div>ค่าอินเทอร์เน็ต บาท</div><div>ค่าอินเทอร์เน็ตศูนย์บาท</div></div>
+      <div class="pf-cols pf-r"><div>ค่าอินเทอร์เน็ต บาท</div><div>ค่าอินเทอร์เน็ตศูนย์บาท</div></div>
+      <div class="pf-cols pf-r"><div>ค่าอินเทอร์เน็ต บาท</div><div>ค่าอินเทอร์เน็ตศูนย์ บาท</div></div>
+
+      <!-- วัสดุ/อุปกรณ์ และ ค่าซ่อมแซม -->
+      <div class="pf-cols pf-h"><div><u>วัสดุ/อุปกรณ์ สนง.</u></div><div><u>ค่าซ่อมแซม</u></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า วัสดุสำนักงาน</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่า</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่า</span><span>บาท</span></div></div>
+
+      <!-- รถยนต์ -->
+      <div class="pf-cols pf-car">
+        <div class="car-l"><u>รถยนต์</u><span class="car-b">บาท</span></div>
+        <div></div>
+      </div>
+
+      <!-- รวม -->
+      <div class="pf-total">รวมขอเบิกค่าใช้จ่ายทั้งหมด &nbsp;<span id="fAmt2"></span>&nbsp; บาท (<span id="fWords"></span>)</div>
+
+      <!-- ลายเซ็น (เซ็นด้วยมือ) -->
+      <div class="pf-sig">
+        <div class="sg">
+          <div class="sg-line"><span>ลงชื่อ</span><i></i><span>ผู้จัดทำ</span></div>
+          <div id="fMaker"></div>
+          <div id="fMakerPos"></div>
+        </div>
+        <div class="sg">
+          <div class="sg-line"><span>ลงชื่อ</span><i></i><span>ผู้อนุมัติ</span></div>
+          <div id="fAppr"></div>
+          <div id="fApprPos"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== บันทึกภายใน (ใช้พิมพ์) ===================== -->
+  <div id="memo">
+    <div class="mm-head">
+      <div class="mm-title"><b>บันทึกภายใน</b><span>หน้า&nbsp; 1&nbsp;&nbsp; ต่อ&nbsp;&nbsp; จบ</span></div>
+      <div class="mm-logo"><img src="logo.png" alt="KI"><div class="mm-co">บริษัท น้ำตาลสุรินทร์ จำกัด</div></div>
+
+      <div class="mm-l mm-r2 mm-c1">วันที่</div>
+      <div class="mm-v mm-r2 mm-date" id="mDate"></div>
+
+      <div class="mm-l mm-r3 mm-c1">เรื่อง</div>
+      <div class="mm-v mm-r3 mm-c2" id="mSubject"></div>
+      <div class="mm-l mm-r3 mm-c3">จาก</div>
+      <div class="mm-v mm-r3 mm-c4" id="mFrom"></div>
+
+      <div class="mm-l mm-r4 mm-c1">เรียน</div>
+      <div class="mm-v mm-r4 mm-c2" id="mTo"></div>
+      <div class="mm-l mm-r4 mm-c3">เพื่อ</div>
+      <div class="mm-v mm-r4 mm-c4" id="mFor"></div>
+    </div>
+
+    <div class="mm-body">
+      <p class="mm-p" id="mIntro"></p>
+
+      <table class="mm-tb" id="mmTb"></table>
+
+      <p class="mm-p" id="mPara"></p>
+      <p class="mm-p" id="mClose"></p>
+
+      <div class="mm-sig">
+        <div class="mm-sg">
+          <div class="mm-sg-line"><span>ผู้ขออนุมัติ</span><i></i></div>
+          <div id="mMaker"></div>
+          <div id="mMakerPos"></div>
+        </div>
+        <div class="mm-sg">
+          <div class="mm-sg-line"><span>ผู้อนุมัติ</span><i></i></div>
+          <div id="mAppr"></div>
+          <div id="mApprPos"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mm-foot" id="mFoot"></div>
+  </div>
+
+<script>
+/* =========================================================
+   1. ตัวช่วยทั่วไป
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const setMsg = text => { $("msg").textContent = text; };
+const pad2 = n => String(n).padStart(2, "0");
+const fmt = n => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const text = v => String(v == null ? "" : v).trim();
+const norm = s => text(s).toUpperCase().replace(/\s/g, "");
+const digits = s => text(s).replace(/\D/g, "");
+
+// รหัส/หมายเลข: ถ้า Excel เก็บเป็นตัวเลข ให้แปลงกลับเป็นข้อความเต็ม ๆ
+function normCode(v) {
+  return typeof v === "number" ? String(Math.round(v)) : text(v);
+}
+
+// วันที่: รับ 04/11/2569, 04/11/2026 และเลขวันที่ของ Excel -> dd/mm/ปีพ.ศ.
+function normDate(v) {
+  if (typeof v === "number") {
+    const d = new Date(Math.round((v - 25569) * 86400000));
+    let y = d.getUTCFullYear();
+    if (y < 2400) y += 543;
+    return pad2(d.getUTCDate()) + "/" + pad2(d.getUTCMonth() + 1) + "/" + y;
+  }
+  const s = text(v);
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!m) return s;
+  let y = +m[3];
+  if (y < 2400) y += 543;
+  return pad2(m[1]) + "/" + pad2(m[2]) + "/" + y;
+}
+
+// รอบค่าบริการ (เช่น 12/10/69-11/11/69) -> รอบเดือนบนใบเบิก (ค.ศ.) 12/10/2026 – 11/11/2026
+function periodToForm(p, due) {
+  const m = text(p).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*[-–]\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    const gy = y => { y = +y; if (y < 100) y += 2500; if (y >= 2400) y -= 543; return y; };
+    return pad2(m[1]) + "/" + pad2(m[2]) + "/" + gy(m[3]) + " – " + pad2(m[4]) + "/" + pad2(m[5]) + "/" + gy(m[6]);
+  }
+  if (!due) return "";
+  const [d, mo, y] = due.split("/").map(Number);                 // ไม่มีรอบในไฟล์: ย้อนจากวันกำหนดชำระ 1 เดือน
+  const s = new Date(y - 543, mo - 2, d), e = new Date(y - 543, mo - 1, d - 1);
+  const f = t => pad2(t.getDate()) + "/" + pad2(t.getMonth() + 1) + "/" + t.getFullYear();
+  return f(s) + " – " + f(e);
+}
+
+/* =========================================================
+   2. เรื่องที่เบิก (อินเตอร์เน็ต 3BB / โทรศัพท์) และการอ่านข้อมูลจาก Excel
+   โครงไฟล์: แถวหัวตารางมีคอลัมน์ "ลำดับ" ตามด้วยคอลัมน์ระบุตัว แล้วต่อด้วยกลุ่มเดือน
+   แต่ละเดือน: ค่าบริการ (หรือ จำนวน) | กำหนดชำระ | รอบค่าบริการ (ไม่มีก็ได้)
+   - ช่องค่าบริการมีตัวเลข = จ่ายแล้ว   - ช่องว่าง = ยังไม่จ่าย   - ช่องมีคำว่า "ย้ายศูนย์" = ย้ายศูนย์
+   ========================================================= */
+const KINDS = {
+  net: {
+    label: "ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB",
+    file: "data.xlsx",
+    pickLabel: n => "เลือกศูนย์ (" + n + " รายชื่อ)",
+    cols: { name: "ชื่อ", key1: "หมายเลขบริการ", key2: "รหัสลูกค้า", extra: "" },
+    option: it => it.no + ". " + it.name,
+    heading: it => it.name,
+    meta: it => "หมายเลขบริการ " + it.key1 + " · รหัสลูกค้า " + it.key2,
+    head: ["ลำดับ", "ชื่อ", "หมายเลขบริการ", "รหัสลูกค้า", "ค่าบริการ", "กำหนดชำระ", "รอบค่าบริการ"],
+    row: (c, amt) => [c.no, c.name, c.key1, c.key2, amt, c.due, c.period || "—"],
+    title: (c) => "อินเทอร์เน็ต 3BB " + c.name + " (วันที่กำหนดชำระ " + c.due + ")",
+    memo: {
+      word: "อินเตอร์เน็ต",
+      subject: c => "ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB<br>(" + esc(c.name) + ")",
+      purpose: "โปรดพิจารณา",
+      intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการอินเตอร์เน็ตเพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
+      close: "จึงเรียนมาเพื่อโปรดพิจารณา",
+      tableTitle: "ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ",
+      cols: ["ลำดับ", "รหัสลูกค้า", "ผู้ใช้บริการ", "จำนวน", "กำหนดชำระ"],
+      widths: [9, 20, 30, 16, 25],
+      monthSpan: 1,
+      total: true,
+      cells: (c, amt) => ["1", c.key2, c.name, amt, c.due]
+    }
+  },
+  phone: {
+    label: "ขอเบิกค่าใช้บริการโทรศัพท์",
+    file: "phone.xlsx",
+    pickLabel: n => "เลือกหมายเลขโทรศัพท์ (" + n + " เบอร์)",
+    cols: { name: "ผู้ใช้บริการ", key1: "หมายเลขโทรศัพท์", key2: "", extra: "ระบบ", phone: true },
+    option: it => it.key1 + " · " + it.name,
+    heading: it => it.key1 + " · " + it.name,
+    meta: it => "หมายเลขโทรศัพท์ " + it.key1 + (it.extra ? " · ระบบ " + it.extra : ""),
+    head: ["ลำดับ", "หมายเลขโทรศัพท์", "ระบบ", "ผู้ใช้บริการ", "ค่าบริการ", "กำหนดชำระ", "รอบค่าบริการ"],
+    row: (c, amt) => [c.no, c.key1, c.extra, c.name, amt, c.due, c.period || "—"],
+    title: (c) => "โทรศัพท์ " + c.key1 + " " + c.name + " (วันที่กำหนดชำระ " + c.due + ")",
+    memo: {
+      word: "โทรศัพท์",
+      subject: c => "ขอเบิกค่าใช้บริการโทรศัพท์",
+      purpose: "โปรดพิจารณาดำเนินการ",
+      intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการหมายเลขโทรศัพท์เพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
+      close: "จึงเรียนมาเพื่อโปรดพิจารณาดำเนินการ",
+      tableTitle: "ตารางค่าใช้จ่ายโทรศัพท์เคลื่อนที่ของบริษัทฯ",
+      cols: ["ลำดับ", "หมายเลขโทรศัพท์", "ระบบ", "ผู้ใช้บริการ", "จำนวน", "กำหนดชำระ"],
+      widths: [11.5, 20.6, 12.6, 25.2, 13.2, 16.9],
+      monthSpan: 2,
+      total: false,
+      cells: (c, amt) => ["1", c.key1, c.extra, c.name, amt, c.due]
+    }
+  }
+};
+
+const DATA = { net: null, phone: null };    // ข้อมูลที่โหลดแล้วของแต่ละเรื่อง (null = ยังไม่โหลด)
+let kind = "net";
+const K = () => KINDS[kind];
+const ITEMS = () => DATA[kind] || [];
+
+function parseSheet(rows, cols) {
+  const h = rows.findIndex(r => text(r[0]) === "ลำดับ");
+  if (h < 0) throw new Error("ไม่พบแถวหัวตาราง (คอลัมน์ A ต้องมีคำว่า ลำดับ)");
+  const top = rows[h], sub = rows[h + 1] || [];
+  const find = name => name ? top.findIndex(c => text(c) === name) : -1;
+  const cName = find(cols.name), cK1 = find(cols.key1), cK2 = find(cols.key2), cEx = find(cols.extra);
+  if (cName < 0 || cK1 < 0) throw new Error("ไม่พบคอลัมน์ '" + cols.name + "' หรือ '" + cols.key1 + "' ในหัวตาราง");
+
+  // กลุ่มเดือน: เริ่มทุกครั้งที่หัวย่อยเป็น "ค่าบริการ" หรือ "จำนวน"
+  // (ชื่อเดือนอยู่ในหัวตารางแถวบน เซลล์ที่ผสานจะมีค่าเฉพาะช่องแรก)
+  const width = Math.max(top.length, sub.length);
+  const starts = [];
+  for (let c = 0; c < width; c++) if (["ค่าบริการ", "จำนวน"].includes(text(sub[c]))) starts.push(c);
+  if (!starts.length) throw new Error("ไม่พบช่อง 'ค่าบริการ' ของแต่ละเดือน");
+  let month = "";
+  const groups = starts.map((s, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] : width;
+    month = text(top[s]) || month;
+    let due = s + 1, per = -1;
+    for (let c = s + 1; c < end; c++) {
+      const t = text(sub[c]);
+      if (t === "กำหนดชำระ") due = c;
+      else if (t.startsWith("รอบ")) per = c;
+    }
+    return { month, amt: s, due, per };
+  });
+
+  const out = [];
+  for (const r of rows.slice(h + 2)) {
+    let key1 = normCode(r[cK1]);
+    if (cols.phone && /^\d{9}$/.test(key1)) key1 = "0" + key1;          // Excel ตัดเลข 0 ข้างหน้าเบอร์
+    const key2 = cK2 >= 0 ? normCode(r[cK2]) : "";
+    if (!key1 && !key2) continue;
+    const months = groups.map(g => {
+      const perV = g.per >= 0 ? r[g.per] : "";
+      const isMoved = [r[g.amt], r[g.due], perV].some(v => /ย้าย/.test(text(v)));
+      const amt = typeof r[g.amt] === "number" ? r[g.amt] : parseFloat(text(r[g.amt]).replace(/,/g, ""));
+      const paid = !isMoved && isFinite(amt) && amt > 0;
+      return {
+        name: g.month,
+        amt: paid ? amt : null,
+        due: isMoved ? "" : normDate(r[g.due]),
+        period: isMoved ? "" : text(perV),
+        status: isMoved ? "moved" : paid ? "paid" : "unpaid"
+      };
+    });
+    const moved = months.some(m => m.status === "moved");
+    if (moved) months.forEach(m => { if (m.status === "unpaid") m.status = "moved"; });   // ย้ายศูนย์แล้ว เดือนที่ว่างไม่ใช่ค้างจ่าย
+    out.push({ no: text(r[0]), name: text(r[cName]), key1, key2, extra: cEx >= 0 ? text(r[cEx]) : "", moved, months });
+  }
+  return out;
+}
+
+/* ---------- อ่านไฟล์ Excel: จากไฟล์ที่เพิ่มในเครื่อง (ถ้ามี) ไม่เช่นนั้นจากไฟล์บนเว็บ ---------- */
+const WB = {};   // workbook ล่าสุดของแต่ละเรื่อง (ใช้ตอนเพิ่มข้อมูล/ดาวน์โหลด)
+function loadWorkbook(k, buf) {
+  const cfg = KINDS[k];
+  const wb = XLSX.read(buf, { type: "array" });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+  const data = parseSheet(rows, cfg.cols);
+  if (!data.length) throw new Error("ไม่พบข้อมูลในไฟล์ (ตรวจหัวคอลัมน์ให้ตรงกับไฟล์ตัวอย่าง " + cfg.file + ")");
+  DATA[k] = data;
+  WB[k] = wb;
+  if (k === "phone") { Object.keys(BILLS).forEach(x => delete BILLS[x]); parseBills(wb); }
+}
+function bufToB64(buf) {
+  const u = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+  return btoa(s);
+}
+function b64ToBuf(b64) {
+  const s = atob(b64), u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return u.buffer;
+}
+function getSaved(k) {
+  try { return JSON.parse(localStorage.getItem("xls_" + k) || "null"); } catch (e) { return null; }
+}
+
+/* ลายนิ้วมือของไฟล์ (ไว้เช็กว่าไฟล์บนเว็บถูกอัปเดตหรือยัง) */
+const SERVER_FP = {}, SYNC_NOTE = {};
+function fingerprint(buf) {
+  const u = new Uint8Array(buf); let x = 2166136261;
+  for (let i = 0; i < u.length; i++) { x ^= u[i]; x = Math.imul(x, 16777619); }
+  return (x >>> 0).toString(16) + "-" + u.length;
+}
+async function fetchServer(k) {
+  const res = await fetch(KINDS[k].file + "?" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error("ไม่พบไฟล์ " + KINDS[k].file + " (" + res.status + ")");
+  const buf = await res.arrayBuffer();
+  SERVER_FP[k] = fingerprint(buf);
+  return buf;
+}
+/* เก็บข้อมูลที่เพิ่ม/แก้ไว้ในเครื่องนี้ พร้อมจดไว้ว่าตอนนั้นไฟล์บนเว็บเป็นฉบับไหน */
+async function saveOverride(k, buf, name) {
+  if (!SERVER_FP[k]) { try { await fetchServer(k); } catch (e) {} }
+  try { localStorage.setItem("xls_" + k, JSON.stringify({ name, b64: bufToB64(buf), base: SERVER_FP[k] || "" })); return true; }
+  catch (e) { return false; }
+}
+function removeSaved(k) { try { localStorage.removeItem("xls_" + k); } catch (e) {} }
+
+async function ensureLoaded(k) {
+  if (DATA[k]) return;
+  let srv = null, err = null;
+  try { srv = await fetchServer(k); } catch (e) { err = e; }
+  const saved = getSaved(k);
+  if (saved) {
+    if (srv && saved.base && saved.base !== SERVER_FP[k]) {            // ไฟล์บนเว็บถูกอัปเดตใหม่ → ใช้ไฟล์ล่าสุด
+      removeSaved(k);
+      SYNC_NOTE[k] = true;
+    } else {
+      try { loadWorkbook(k, b64ToBuf(saved.b64)); return; }
+      catch (e) { removeSaved(k); }                                      // ข้อมูลที่เก็บไว้เสีย: ล้างแล้วใช้ไฟล์บนเว็บ
+    }
+  }
+  try {
+    if (!srv) throw err || new Error("โหลดไฟล์ไม่ได้");
+    loadWorkbook(k, srv);
+  } catch (e) {
+    DATA[k] = [];
+    setMsg("โหลดข้อมูลไม่ได้: " + (e && e.message || "error"));
+  }
+}
+
+/* =========================================================
+   3. เลือก/ค้นหา และแสดงสถานะรายเดือน
+   ========================================================= */
+let center = null;    // รายการที่แสดงอยู่ (ศูนย์ หรือ เบอร์โทร)
+let current = null;   // เดือนที่เลือกสำหรับพิมพ์ใบเบิก (ใช้ร่วมกับส่วนอนุมัติและพิมพ์)
+
+const STATUS = {
+  paid:   { chip: "paid",   label: "✅ จ่ายแล้ว" },
+  unpaid: { chip: "unpaid", label: "⏳ ยังไม่จ่าย" },
+  moved:  { chip: "moved",  label: "🚚 ย้ายศูนย์" }
+};
+
+function show(c) {
+  center = c;
+  const idx = ITEMS().indexOf(c);
+  $("itemSel").value = idx >= 0 ? String(idx) : "";
+  $("result").style.display = "block";
+  $("cName").textContent = K().heading(c);
+  $("cBadge").innerHTML = c.moved ? '<span class="badge moved">🚚 ย้ายศูนย์</span>' : "";
+  $("cMeta").textContent = K().meta(c);
+  $("cBanner").innerHTML = c.moved
+    ? '<div class="banner">🚚 รายการนี้ย้ายศูนย์แล้ว (ตามไฟล์ Excel) จึงไม่มียอดค่าบริการให้เบิกในเดือนที่ระบุ</div>'
+    : "";
+  let sel = -1;                                          // เริ่มต้น: เดือนล่าสุดที่มียอด
+  c.months.forEach((m, i) => { if (m.status === "paid") sel = i; });
+  renderMonths(sel);
+  $("result").scrollIntoView({ behavior: "smooth" });
+}
+
+/* ---------- ใบแจ้งค่าบริการโทรศัพท์ (ชีต "รายละเอียดบิล" ใน phone.xlsx) ---------- */
+const BILLS = {};    // "เบอร์(เฉพาะตัวเลข)|เดือน" -> รายการแถวของใบแจ้ง
+
+function parseBills(wb) {
+  const name = wb.SheetNames.find(n => n.includes("รายละเอียด"));
+  if (!name) return;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: "" });
+  const h = rows.findIndex(r => text(r[0]) === "หมายเลขโทรศัพท์");
+  if (h < 0) return;
+  for (const r of rows.slice(h + 1)) {
+    const ph = digits(r[0]), mo = text(r[1]), type = text(r[2]);
+    if (!ph || !mo || !type) continue;
+    const key = ph + "|" + mo;
+    if (!BILLS[key]) BILLS[key] = [];
+    BILLS[key].push({ type, label: text(r[3]), qty: text(r[4]), amt: r[5] });
+  }
+}
+
+const amtText = v => typeof v === "number" ? fmt(v) : text(v);
+
+function billRow(r) {
+  const l = esc(r.label), a = esc(amtText(r.amt)), q = esc(r.qty);
+  switch (r.type) {
+    case "รวม":        return '<div class="b-bar"><span>' + l + "</span><span>" + a + "</span></div>";
+    case "ยอดรวม":     return '<div class="b-bar big"><span>' + l + "</span><span>" + a + "</span></div>";
+    case "หัวข้อ":     return '<div class="b-head">' + l + "</div>";
+    case "หัวข้อย่อย": return '<div class="b-sub">' + l + "</div>";
+    case "ตาราง":      return '<div class="b-th">' + l + "</div>";
+    case "รายการ":     return '<div class="b-item"><span>' + l + '</span><span class="q">' + q + '</span><span class="a">' + a + "</span></div>";
+    case "รวมย่อย":    return '<div class="b-item b-subtotal"><span>' + l + '</span><span></span><span class="a">' + a + "</span></div>";
+    default:           return '<div class="b-line"><span>' + l + "</span><span>" + a + "</span></div>";
+  }
+}
+
+function renderBill() {
+  const box = $("billBox");
+  if (kind !== "phone" || !center) { box.style.display = "none"; return; }
+  const month = current ? current.month : "";
+  const rows = month ? BILLS[digits(center.key1) + "|" + month] : null;
+  let h = '<div class="bill-title">🧾 ใบแจ้งค่าบริการโทรศัพท์' + (month ? " · เดือน " + esc(month) : "") + "</div>";
+  if (!rows) {
+    h += '<div class="m-hint">ยังไม่มีรายละเอียดใบแจ้งค่าบริการของเดือนนี้ในไฟล์ phone.xlsx (ชีต "รายละเอียดบิล")</div>';
+  } else {
+    h += rows.map(billRow).join("");
+    const total = rows.find(r => r.type === "ยอดรวม" && typeof r.amt === "number");
+    if (total && current && Math.abs(total.amt - current.amt) > 0.005) {
+      h += '<div class="banner warn">⚠️ ยอดรวมในใบแจ้ง (' + fmt(total.amt) + ") ไม่ตรงกับยอดในตารางข้อมูล (" + fmt(current.amt) + ") ตรวจสอบไฟล์ Excel อีกครั้ง</div>";
+    }
+  }
+  box.innerHTML = h;
+  box.style.display = "block";
+}
+
+/* ---------- ป้ายแจ้งเตือนกำหนดชำระ ---------- */
+function parseDue(s) {
+  const m = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || ""));
+  if (!m) return null;
+  let y = +m[3]; if (y > 2400) y -= 543;
+  const d = new Date(y, +m[2] - 1, +m[1]);
+  return isNaN(d) ? null : d;
+}
+function dueInfo(m) {                      // ยังไม่จ่ายแต่เลยกำหนด = แดง / ครบกำหนดใน 7 วัน = เหลือง / อื่นๆ ไม่แสดง
+  const d = parseDue(m && m.due); if (!d || m.status === "moved") return null;
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const days = Math.round((d - t) / 86400000);
+  if (m.status === "unpaid" && days < 0) return { kind: "over", text: "⚠️ เลยกำหนด " + (-days) + " วัน", icon: "⚠️" };
+  if (days >= 0 && days <= 7) return { kind: "soon", text: days === 0 ? "⏰ ครบกำหนดวันนี้" : "⏰ ครบกำหนดใน " + days + " วัน", icon: "⏰" };
+  return null;
+}
+function renderMonths(sel) {
+  const grid = $("mGrid");
+  grid.innerHTML = "";
+  center.months.forEach((m, i) => {
+    const st = STATUS[m.status];
+    const printable = m.status === "paid";
+    const el = document.createElement(printable ? "button" : "div");
+    el.className = "mcard" + (printable ? "" : " off") + (i === sel ? " sel" : "");
+    el.innerHTML =
+      '<div class="m-name">' + esc(m.name) + "</div>" +
+      '<span class="chip ' + st.chip + '">' + st.label + "</span>" +
+      (dueInfo(m) ? ' <span class="chip due-' + dueInfo(m).kind + '">' + dueInfo(m).text + "</span>" : "") +
+      '<div class="m-amt">' + (m.amt != null ? fmt(m.amt) + " ฿" : "—") + "</div>" +
+      '<div class="m-sub">กำหนดชำระ ' + esc(m.due || "—") + "</div>" +
+      '<div class="m-sub">รอบ ' + esc(m.period || "—") + "</div>" +
+      (i === sel ? '<div class="m-pick">✓ เลือกพิมพ์ใบเบิกเดือนนี้</div>' : "");
+    if (printable) el.onclick = () => renderMonths(i);
+    grid.appendChild(el);
+  });
+  $("mHint").textContent = center.months.some(m => m.status === "paid")
+    ? "กดการ์ดเดือนที่มียอด เพื่อเลือกเดือนที่จะพิมพ์ใบเบิก"
+    : "ไม่มียอดค่าบริการในไฟล์ Excel จึงยังไม่มีใบเบิกให้พิมพ์";
+
+  if (sel < 0) { current = null; $("detail").style.display = "none"; renderBill(); return; }
+  const m = center.months[sel];
+  current = { no: center.no, name: center.name, key1: center.key1, key2: center.key2, extra: center.extra,
+              acc: center.key2 || center.key1,               // ใช้เป็นกุญแจเก็บสถานะอนุมัติ
+              amt: m.amt, due: m.due, period: m.period, month: m.name };
+  $("detail").style.display = "block";
+  $("tTitle").textContent = K().title(current);
+  $("tHead").innerHTML = K().head.map(x => "<th>" + esc(x) + "</th>").join("");
+  $("tRow").innerHTML = K().row(current, fmt(m.amt)).map(x => "<td>" + esc(x) + "</td>").join("");
+  $("period").value = periodToForm(m.period, m.due);
+  renderApproval();
+  renderBill();
+}
+
+function hideResult() {
+  center = null;
+  current = null;
+  $("result").style.display = "none";
+  $("itemSel").value = "";
+}
+
+/* ---------- พิมพ์ค้นหา ---------- */
+function lookupNet(inputId) {
+  const v = norm($(inputId).value);
+  const c = v ? ITEMS().find(d => norm(d.key2) === v || norm(d.key1) === v) : null;
+  if (c) { setMsg(""); show(c); }
+  else setMsg("ไม่พบข้อมูลนี้ในระบบ ตรวจสอบตัวเลข/ตัวอักษรอีกครั้ง");
+}
+
+function lookupTel() {
+  const d = digits($("telIn").value);
+  if (d.length < 4) { setMsg("พิมพ์เบอร์โทรศัพท์อย่างน้อย 4 หลัก"); return; }
+  const all = ITEMS().filter(x => digits(x.key1).includes(d));
+  const hit = all.length === 1 ? all[0] : all.find(x => digits(x.key1) === d);
+  if (hit) { setMsg(""); show(hit); }
+  else if (all.length > 1) setMsg("พบ " + all.length + " เบอร์: " + all.map(x => x.key1).join(", ") + " พิมพ์ให้ครบ หรือเลือกจากรายการด้านบน");
+  else setMsg("ไม่พบเบอร์นี้ในระบบ");
+}
+
+$("accBtn").onclick = () => lookupNet("accIn");
+$("svcBtn").onclick = () => lookupNet("svcIn");
+$("telBtn").onclick = lookupTel;
+
+["accIn", "svcIn"].forEach(id => {
+  const other = id === "accIn" ? "svcIn" : "accIn";
+  $(id).addEventListener("keydown", e => { if (e.key === "Enter") lookupNet(id); });
+  $(id).addEventListener("input", () => {
+    if ($(id).value) $(other).value = "";            // พิมพ์ช่องหนึ่ง ล้างอีกช่อง
+    setMsg("");
+    if (!$(id).value.trim()) hideResult();           // ลบเลขจนว่าง -> ซ่อนผลลัพธ์
+  });
+});
+$("telIn").addEventListener("keydown", e => { if (e.key === "Enter") lookupTel(); });
+$("telIn").addEventListener("input", () => {
+  setMsg("");
+  if (!$("telIn").value.trim()) hideResult();
+});
+
+/* ---------- เลือกจากรายการ ---------- */
+$("itemSel").onchange = () => {
+  const v = $("itemSel").value;
+  ["accIn", "svcIn", "telIn"].forEach(id => { $(id).value = ""; });
+  setMsg("");
+  if (v === "") hideResult(); else show(ITEMS()[+v]);
+};
+
+function fillItems() {
+  const sel = $("itemSel");
+  sel.innerHTML = "";
+  const first = document.createElement("option");
+  first.value = ""; first.textContent = "-- เลือก --";
+  sel.appendChild(first);
+  ITEMS().forEach((it, i) => {
+    const o = document.createElement("option");
+    o.value = String(i); o.textContent = K().option(it);
+    sel.appendChild(o);
+  });
+  $("itemLabel").textContent = K().pickLabel(ITEMS().length);
+}
+
+/* ---------- สรุปภาพรวมรายเดือน (ทุกศูนย์/เบอร์ ของเรื่องที่เลือก) ---------- */
+function sumEmpty() {   // ไม่มีข้อมูลของเรื่องนี้: ยังแสดงการ์ดไว้ เพื่อให้สลับกลับได้
+  $("summary").style.display = "block";
+  $("sumMonth").style.display = "none";
+  $("sumBody").innerHTML = '<div class="m-sub">ยังไม่มีข้อมูลสถานะรายเดือนของเรื่องนี้</div>';
+}
+$("sumKind").onchange = () => { $("kindSel").value = $("sumKind").value; $("kindSel").onchange(); };
+
+let sumView = "unpaid";   // รายการที่แสดงในการ์ดสรุป: "unpaid" | "paid"
+let sumLast = null;       // เดือนที่เลือกล่าสุด (ใช้ตอนกดสลับกล่องตัวเลข)
+
+function renderSummary(idx) {
+  const box = $("summary"), items = ITEMS();
+  if (!items.length || !items[0].months.length) { sumEmpty(); return; }
+  const names = items[0].months.map(m => m.name);
+  if (idx == null) {                                       // เริ่มต้น: เดือนล่าสุดที่มีคนจ่ายแล้ว
+    idx = -1;
+    names.forEach((n, i) => { if (items.some(it => it.months[i] && it.months[i].status === "paid")) idx = i; });
+  }
+  if (idx < 0) { sumEmpty(); return; }
+  $("sumMonth").style.display = "";
+  sumLast = idx;
+  const sm = $("sumMonth");
+  sm.innerHTML = names.map((n, i) => '<option value="' + i + '"' + (i === idx ? " selected" : "") + ">" + esc(n) + "</option>").join("");
+
+  let paidList = [], unpaid = [], moved = 0, total = 0;
+  items.forEach(it => {
+    const m = it.months[idx]; if (!m) return;
+    if (m.status === "paid") { paidList.push(it); total += m.amt || 0; }
+    else if (m.status === "moved") moved++;
+    else unpaid.push(it);
+  });
+  const paid = paidList.length, all = paid + unpaid.length, pct = all ? Math.round(paid * 100 / all) : 0;
+
+  let s = '<div class="sum-stats">' +
+    '<button type="button" class="stat ok' + (sumView === "paid" ? " on" : "") + '" data-v="paid"><b>' + paid + '</b><span>จ่ายแล้ว · กดดูรายชื่อ</span></button>' +
+    '<button type="button" class="stat bad' + (sumView === "unpaid" ? " on" : "") + '" data-v="unpaid"><b>' + unpaid.length + '</b><span>ยังไม่จ่าย · กดดูรายชื่อ</span></button>' +
+    '<div class="stat"><b>' + fmt(total) + ' ฿</b><span>ยอดที่จ่ายแล้ว</span></div>' +
+    '</div>' +
+    '<div class="sum-bar" title="' + pct + '%"><i style="width:' + pct + '%"></i></div>' +
+    '<div class="m-sub">จ่ายแล้ว ' + paid + ' จาก ' + all + ' รายการ (' + pct + '%)' +
+    (moved ? " · ไม่นับย้ายศูนย์ " + moved + " รายการ" : "") + "</div>";
+  const dues = items.map(it => dueInfo(it.months[idx])).filter(Boolean);
+  const nOver = dues.filter(x => x.kind === "over").length, nSoon = dues.filter(x => x.kind === "soon").length;
+  if (nOver || nSoon) s += '<div class="due-line">' + (nOver ? '<span class="chip due-over">⚠️ เลยกำหนด ' + nOver + " รายการ</span> " : "") + (nSoon ? '<span class="chip due-soon">⏰ ครบกำหนดใน 7 วัน ' + nSoon + " รายการ</span>" : "") + "</div>";
+  const list = sumView === "paid" ? paidList : unpaid;
+  if (list.length) {
+    s += '<div class="sum-lbl ' + (sumView === "paid" ? "is-paid" : "is-unpaid") + '">' +
+      (sumView === "paid" ? "✅ จ่ายแล้ว " : "🔴 ยังไม่จ่าย ") + list.length + ' รายการ (กดชื่อเพื่อเปิดดู)</div><div class="sum-chips">' +
+      list.map(it => '<button type="button" class="alt sum-chip" data-i="' + items.indexOf(it) + '">' + (dueInfo(it.months[idx]) ? dueInfo(it.months[idx]).icon + " " : "") + esc(K().option(it)) + "</button>").join("") +
+      "</div>";
+  } else if (sumView === "paid") {
+    s += '<div class="sum-lbl is-paid">ยังไม่มีรายการที่จ่ายแล้วในเดือนนี้</div>';
+  }
+  $("sumBody").innerHTML = s;
+  $("sumBody").querySelectorAll(".sum-chip").forEach(b => {
+    b.onclick = () => show(items[+b.dataset.i]);
+  });
+  $("sumBody").querySelectorAll("button.stat").forEach(b => {
+    b.onclick = () => { sumView = b.dataset.v; renderSummary(sumLast); };
+  });
+  box.style.display = "block";
+}
+$("sumMonth").onchange = () => renderSummary(+$("sumMonth").value);
+
+/* ---------- เปลี่ยนเรื่องที่เบิก ---------- */
+async function setKind(k) {
+  kind = k;
+  $("kindSel").value = k;
+  $("sumKind").value = k;
+  $("addKind").value = k;
+  hideResult();
+  setMsg("");
+  ["accIn", "svcIn", "telIn"].forEach(id => { $(id).value = ""; });
+  $("searchNet").style.display   = k === "net" ? "block" : "none";
+  $("searchPhone").style.display = k === "phone" ? "block" : "none";
+  $("printBtn").style.display    = k === "net" ? "" : "none";     // ใบรายงานแบบเดิมใช้กับอินเตอร์เน็ตเท่านั้น
+  await ensureLoaded(k);
+  fillItems();
+  renderSummary();
+  updateUpStatus();
+  addLabels();
+}
+
+/* =========================================================
+   เพิ่มข้อมูลในเว็บ (ไม่ต้องแก้ Excel) -> สร้างไฟล์ใหม่ในหน่วยความจำ แล้วโหลดกลับเข้าระบบ
+   ========================================================= */
+const round2 = n => Math.round((+n || 0) * 100) / 100;
+const fmtPhone = s => { const d = digits(s); return d.length === 10 ? d.slice(0, 3) + "-" + d.slice(3) : (d.length === 9 ? "0" + d.slice(0, 2) + "-" + d.slice(2) : text(s)); };
+const keyOf = (k, v) => { let x = normCode(v); if (k === "phone") { x = digits(x); if (/^\d{9}$/.test(x)) x = "0" + x; } return x.toUpperCase(); };
+function dueText(iso) {                       // yyyy-mm-dd (ค.ศ.) -> dd/mm/พ.ศ. (เก็บเป็นข้อความ กันสลับวัน/เดือน)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); if (!m) return "";
+  return m[3] + "/" + m[2] + "/" + (+m[1] + (+m[1] < 2400 ? 543 : 0));
+}
+function groupsOf(top, sub, width) {          // ตรรกะเดียวกับ parseSheet
+  const starts = [];
+  for (let c = 0; c < width; c++) if (["ค่าบริการ", "จำนวน"].includes(text(sub[c]))) starts.push(c);
+  let month = "";
+  return starts.map((s, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] : width;
+    month = text(top[s]) || month;
+    let due = s + 1, per = -1;
+    for (let c = s + 1; c < end; c++) { const t = text(sub[c]); if (t === "กำหนดชำระ") due = c; else if (t.startsWith("รอบ")) per = c; }
+    return { month, amt: s, due, per, end };
+  });
+}
+
+function billRows(phone, month, main, items) {
+  const r = [], P = phone, M = month;
+  const ex = items.filter(i => i.label && i.amt > 0);
+  const exTotal = round2(ex.reduce((a, i) => a + i.amt, 0));
+  main = round2(main);
+  const before = round2(main + exTotal), vat = round2(before * 0.07), total = round2(before + vat);
+  r.push([P, M, "รวม", "ค่าบริการแพ็กเกจหลัก", "", main]);
+  if (ex.length) {
+    r.push([P, M, "หัวข้อ", "ค่าบริการแพ็กเกจเสริมและค่าบริการส่วนเกิน", "", ""]);
+    r.push([P, M, "หัวข้อย่อย", "ค่าบริการส่วนเกิน", "", ""]);
+    r.push([P, M, "ตาราง", "ค่าบริการส่วนเกิน", "", ""]);
+    ex.forEach(i => r.push([P, M, "รายการ", i.label, i.qty || "", round2(i.amt)]));
+    r.push([P, M, "รวมย่อย", "รวมค่าบริการส่วนเกิน", "", exTotal]);
+    r.push([P, M, "บรรทัด", "รวมค่าบริการส่วนเกิน", "", exTotal]);
+    r.push([P, M, "รวม", "รวมค่าบริการแพ็กเกจเสริมและค่าบริการส่วนเกิน", "", exTotal]);
+  }
+  r.push([P, M, "รวม", "รวมค่าบริการก่อนภาษีมูลค่าเพิ่ม", "", before]);
+  r.push([P, M, "บรรทัด", "ภาษีมูลค่าเพิ่ม 7%", "", vat]);
+  r.push([P, M, "ยอดรวม", "รวมค่าบริการรอบบิลปัจจุบัน", "", total]);
+  return { rows: r, total };
+}
+
+function addEntry(k, f) {
+  const wb = WB[k]; if (!wb) throw new Error("ยังไม่ได้โหลดไฟล์");
+  const cols = KINDS[k].cols;
+  const sn = wb.SheetNames[0], ws = wb.Sheets[sn];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+  const merges = (ws["!merges"] || []).map(m => ({ s: { ...m.s }, e: { ...m.e } }));
+  const hr = aoa.findIndex(r => text(r[0]) === "ลำดับ");
+  if (hr < 0) throw new Error("ไม่พบแถวหัวตาราง");
+  let width = Math.max(...aoa.slice(0, hr + 2).map(r => r.length));
+  const pad = () => aoa.forEach(r => { while (r.length < width) r.push(""); });
+  pad();
+  const find = n => n ? aoa[hr].findIndex(c => text(c) === n) : -1;
+  const cName = find(cols.name), cK1 = find(cols.key1), cK2 = find(cols.key2), cEx = find(cols.extra);
+
+  // เดือน: ใช้กลุ่มเดิม หรือสร้างกลุ่มคอลัมน์ใหม่ต่อท้าย
+  let groups = groupsOf(aoa[hr], aoa[hr + 1], width);
+  if (!groups.length) throw new Error("ไม่พบช่อง 'ค่าบริการ' ของแต่ละเดือน");
+  let g = groups.find(x => x.month === f.month);
+  if (!g) {
+    const last = groups[groups.length - 1], w = width - last.amt, s = width;
+    width += w; pad();
+    for (let i = 0; i < w; i++) aoa[hr + 1][s + i] = aoa[hr + 1][last.amt + i];
+    aoa[hr][s] = f.month;
+    if (w > 1) merges.push({ s: { r: hr, c: s }, e: { r: hr, c: s + w - 1 } });
+    groups = groupsOf(aoa[hr], aoa[hr + 1], width);
+    g = groups[groups.length - 1];
+  }
+
+  // แถวของรายการ: ใช้แถวเดิมถ้ามีรหัสตรงกัน ไม่งั้นเพิ่มแถวใหม่ต่อท้ายข้อมูล
+  const want = keyOf(k, f.key1);
+  let ri = -1, firstEmpty = -1, count = 0;
+  for (let i = hr + 2; i < aoa.length; i++) {
+    const key = keyOf(k, aoa[i][cK1]);
+    if (key) { count++; if (key === want) ri = i; }
+    else if (firstEmpty < 0) firstEmpty = i;
+  }
+  if (ri < 0) {
+    ri = firstEmpty >= 0 ? firstEmpty : aoa.length;
+    if (ri >= aoa.length) aoa.push(new Array(width).fill(""));
+    aoa[ri][0] = String(count + 1);
+  }
+  const row = aoa[ri];
+  row[cK1] = f.key1;
+  if (cName >= 0 && f.name) row[cName] = f.name;
+  if (cK2 >= 0 && f.key2) row[cK2] = f.key2;
+  if (cEx >= 0 && f.extra) row[cEx] = f.extra;
+  row[g.amt] = f.amt;
+  if (g.due >= 0) row[g.due] = f.due || row[g.due] || "";
+  if (g.per >= 0 && f.per) row[g.per] = f.per;
+
+  const nws = XLSX.utils.aoa_to_sheet(aoa);
+  nws["!merges"] = merges;
+  if (ws["!cols"]) nws["!cols"] = ws["!cols"];
+  wb.Sheets[sn] = nws;
+
+  // รายละเอียดบิลโทรศัพท์
+  if (k === "phone" && f.bill) {
+    const bn = wb.SheetNames.find(n => n.includes("รายละเอียด")) || "รายละเอียดบิล";
+    const head = ["หมายเลขโทรศัพท์", "เดือน", "ชนิดแถว", "รายการ", "ปริมาณ", "จำนวนเงิน"];
+    let rows = [];
+    if (wb.Sheets[bn]) rows = XLSX.utils.sheet_to_json(wb.Sheets[bn], { header: 1, raw: true, defval: "" });
+    const bh = rows.findIndex(r => text(r[0]) === "หมายเลขโทรศัพท์");
+    let body = (bh >= 0 ? rows.slice(bh + 1) : []).filter(r => r.some(c => text(c) !== ""));
+    body = body.filter(r => !(digits(r[0]) === digits(f.key1) && text(r[1]) === f.month));   // แทนที่ของเดิมในเดือนเดียวกัน
+    const newRows = billRows(f.key1, f.month, f.bill.main, f.bill.items).rows;
+    const bws = XLSX.utils.aoa_to_sheet([head, ...body, ...newRows]);
+    bws["!cols"] = [{ wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 46 }, { wch: 14 }, { wch: 14 }];
+    if (!wb.Sheets[bn]) wb.SheetNames.splice(1, 0, bn);
+    wb.Sheets[bn] = bws;
+  }
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" });
+}
+
+/* ---------- ฟอร์ม ---------- */
+function addLabels() {
+  const k = $("kindSel").value, items = DATA[k] || [];
+  const phone = k === "phone";
+  $("addKind").value = k;
+  $("lName").textContent = phone ? "ผู้ใช้บริการ" : "ชื่อศูนย์";
+  $("lK1").textContent = phone ? "หมายเลขโทรศัพท์" : "หมายเลขบริการ";
+  $("lK2").textContent = "รหัสลูกค้า";
+  $("fK2").style.display = phone ? "none" : "";
+  $("fEx").style.display = phone ? "" : "none";
+  $("fPer").style.display = phone ? "none" : "";
+  $("billFormBox").style.display = phone ? "" : "none";
+  const names = items.length ? items[0].months.map(m => m.name) : [];
+  const sel = $("addMonth"), keep = sel.value;
+  sel.innerHTML = names.map(n => "<option>" + esc(n) + "</option>").join("") + '<option value="__new">+ เดือนใหม่…</option>';
+  if (names.includes(keep)) sel.value = keep; else if (names.length) sel.value = names[names.length - 1];
+  $("addMonthNew").style.display = sel.value === "__new" ? "" : "none";
+}
+function addBillRow(label, qty, amt) {
+  const d = document.createElement("div");
+  d.className = "bill-row";
+  d.innerHTML = '<input class="bl" placeholder="รายการ เช่น เลขหมายพิเศษต่างๆ" value="' + esc(label || "") + '">' +
+    '<input class="bq" placeholder="ปริมาณ เช่น 32:00 นาที" value="' + esc(qty || "") + '">' +
+    '<input class="ba" type="number" step="0.01" min="0" inputmode="decimal" placeholder="บาท" value="' + (amt || "") + '">' +
+    '<button type="button" class="alt bx" aria-label="ลบรายการ">✕</button>';
+  d.querySelector(".bx").onclick = () => { d.remove(); billCalc(); };
+  $("billItems").appendChild(d);
+}
+function billItems() {
+  return [...$("billItems").querySelectorAll(".bill-row")].map(r => ({
+    label: r.querySelector(".bl").value.trim(), qty: r.querySelector(".bq").value.trim(), amt: parseFloat(r.querySelector(".ba").value) || 0
+  }));
+}
+function billCalc() {
+  if (!$("billOn").checked) { $("addAmt").readOnly = false; return; }
+  const b = billRows("-", "-", parseFloat($("billMain").value) || 0, billItems());
+  const t = b.rows.filter(r => r[2] === "รวม" && /ก่อนภาษี/.test(r[3]))[0][5], v = b.rows.filter(r => r[2] === "บรรทัด" && /^ภาษี/.test(r[3]))[0][5];
+  $("billSum").innerHTML = "ก่อนภาษี " + fmt(t) + " · ภาษี 7% " + fmt(v) + " · <b>รวม " + fmt(b.total) + " บาท</b>";
+  $("addAmt").value = b.total; $("addAmt").readOnly = true;
+}
+$("billOn").onchange = () => {
+  $("billForm").style.display = $("billOn").checked ? "" : "none";
+  if ($("billOn").checked && !$("billItems").children.length) addBillRow();
+  billCalc();
+};
+$("billAdd").onclick = () => addBillRow();
+$("billMain").oninput = billCalc;
+$("billItems").addEventListener("input", billCalc);
+$("addMonth").onchange = () => { $("addMonthNew").style.display = $("addMonth").value === "__new" ? "" : "none"; };
+/* แถวปุ่มด้านบนอยู่ที่เดิมเสมอ แผงที่เปิดจะอยู่ใต้แถวปุ่ม (เปิดทีละแผง) */
+function togglePanel(id) {
+  const other = id === "addBox" ? "upBox" : "addBox";
+  const on = $(id).hidden;                          // ตอนนี้ซ่อนอยู่ = กำลังจะเปิด
+  $(id).hidden = !on; $(other).hidden = true;
+  [["addBox", "addTog"], ["upBox", "upTog"]].forEach(p => {
+    const open = !$(p[0]).hidden;
+    $(p[1]).classList.toggle("on", open); $(p[1]).setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  if (on && id === "addBox") addLabels();
+}
+$("addTog").onclick = () => togglePanel("addBox");
+$("addKind").onchange = () => { $("kindSel").value = $("addKind").value; $("kindSel").onchange(); };
+$("upTog").onclick = () => togglePanel("upBox");
+$("addK1").onchange = () => {                  // เจอรายการเดิม: เติมชื่อให้
+  const k = $("kindSel").value, w = keyOf(k, $("addK1").value), it = (DATA[k] || []).find(x => keyOf(k, x.key1) === w);
+  if (it) { if (!$("addName").value) $("addName").value = it.name; if (k === "phone" && it.extra) $("addEx").value = it.extra; if (k === "net" && !$("addK2").value) $("addK2").value = it.key2; }
+};
+
+$("addSave").onclick = async () => {
+  const k = $("kindSel").value, msg = $("addMsg"), phone = k === "phone";
+  const fail = t => { msg.textContent = "❌ " + t; };
+  const month = $("addMonth").value === "__new" ? $("addMonthNew").value.trim() : $("addMonth").value;
+  let key1 = $("addK1").value.trim();
+  if (phone) key1 = fmtPhone(key1);
+  const f = {
+    key1, name: $("addName").value.trim(), key2: $("addK2").value.trim(),
+    extra: $("addEx").value.trim(), month, amt: parseFloat($("addAmt").value),
+    due: dueText($("addDue").value), per: $("addPer").value.trim(), bill: null
+  };
+  if (!key1) return fail("กรอก" + (phone ? "หมายเลขโทรศัพท์" : "หมายเลขบริการ") + "ก่อน");
+  if (!f.name && !(DATA[k] || []).some(x => keyOf(k, x.key1) === keyOf(k, key1))) return fail("กรอก" + (phone ? "ผู้ใช้บริการ" : "ชื่อศูนย์") + "ก่อน");
+  if (!month) return fail("เลือกหรือพิมพ์เดือน");
+  if (phone && $("billOn").checked) {
+    f.bill = { main: parseFloat($("billMain").value) || 0, items: billItems() };
+    f.amt = billRows(key1, month, f.bill.main, f.bill.items).total;
+  }
+  if (!(f.amt > 0)) return fail("กรอกค่าบริการ (มากกว่า 0)");
+  const prevWB = WB[k], prevData = DATA[k];
+  try {
+    const buf = addEntry(k, f);
+    loadWorkbook(k, buf);                       // ตรวจว่าไฟล์ใหม่อ่านกลับได้จริง
+    let kept = true;
+    makeUndo(k, "เพิ่มข้อมูลผ่านฟอร์ม");
+    kept = await saveOverride(k, buf, "ข้อมูลที่เพิ่มในเว็บ");
+    await setKind(k);
+    const it = (DATA[k] || []).find(x => keyOf(k, x.key1) === keyOf(k, key1));
+    if (it) show(it);
+    msg.textContent = "✅ บันทึกแล้ว: " + key1 + " · " + month + " · " + fmt(f.amt) + " บาท" + (kept ? "" : " (เก็บถาวรไม่ได้ จะหายเมื่อรีเฟรช — กดดาวน์โหลดไฟล์เก็บไว้)");
+  } catch (e) {
+    WB[k] = prevWB; DATA[k] = prevData;
+    fail("บันทึกไม่สำเร็จ: " + (e && e.message || "error"));
+  }
+};
+
+$("xlsDown").onclick = () => {
+  const k = $("kindSel").value, wb = WB[k];
+  if (!wb) { $("upStatus").textContent = "❌ ยังไม่มีไฟล์ให้ดาวน์โหลด"; return; }
+  const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  a.download = KINDS[k].file; document.body.appendChild(a); a.click(); a.remove();
+};
+
+/* ---------- ปุ่มวิธีใช้ ---------- */
+$("helpBtn").onclick = () => { const d = $("helpDlg"); if (d.showModal) d.showModal(); else d.setAttribute("open", ""); };
+$("helpClose").onclick = () => { const d = $("helpDlg"); if (d.close) d.close(); else d.removeAttribute("open"); };
+$("helpDlg").addEventListener("click", e => { if (e.target === $("helpDlg")) $("helpClose").click(); });   // กดพื้นหลังเพื่อปิด
+
+/* ---------- เช็กว่าไฟล์ Excel บนเว็บ/ในโฟลเดอร์ถูกแก้ใหม่หรือยัง (เช่น แก้ไฟล์แล้วกลับมาที่หน้าเว็บ) ---------- */
+let lastCheck = 0;
+async function checkServerUpdate() {
+  const k = $("kindSel").value;
+  if (!DATA[k] || !SERVER_FP[k] || Date.now() - lastCheck < 5000) return;
+  lastCheck = Date.now();
+  try {
+    const res = await fetch(KINDS[k].file + "?" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    if (fingerprint(await res.arrayBuffer()) === SERVER_FP[k]) { $("syncBar").style.display = "none"; return; }
+    const bar = $("syncBar"), warn = getSaved(k) ? " (ข้อมูลที่เพิ่มค้างในเครื่องนี้จะถูกแทนที่)" : "";
+    bar.className = "banner local-banner";
+    bar.innerHTML = '<span>🔄 ไฟล์ ' + esc(KINDS[k].file) + ' มีการอัปเดตใหม่' + warn + '</span>' +
+      '<span class="lb-btns"><button type="button" id="syncGo">โหลดข้อมูลใหม่</button></span>';
+    bar.style.display = "";
+    $("syncGo").onclick = async () => { bar.style.display = "none"; removeSaved(k); SYNC_NOTE[k] = false; DATA[k] = null; await setKind(k); };
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkServerUpdate(); });
+window.addEventListener("focus", checkServerUpdate);
+setInterval(checkServerUpdate, 60000);
+
+/* ---------- ปุ่มเพิ่ม/อัปเดตไฟล์ Excel ---------- */
+function updateUpStatus() {
+  const k = $("kindSel").value, saved = getSaved(k);
+  $("upFor").textContent = "ไฟล์สำหรับเรื่อง: " + KINDS[k].label + " (" + KINDS[k].file + ")";
+  $("upStatus").textContent = saved ? "✅ กำลังใช้ไฟล์ที่เพิ่ม: " + saved.name : "ใช้ไฟล์บนเว็บ: " + KINDS[k].file;
+  $("xlsClear").style.display = saved ? "" : "none";
+  const lb = $("localBanner");
+  if (saved) {
+    lb.className = "banner warn local-banner";
+    lb.innerHTML = '<span>📌 ตอนนี้แสดงข้อมูลที่เพิ่ม/แก้ในเครื่องนี้ (คนอื่นไม่เห็น และอาจไม่ตรงกับไฟล์ล่าสุดบนเว็บ)</span>' +
+      '<span class="lb-btns">' + (GH ? '<button type="button" id="lbPush">☁️ อัปเดตขึ้นเว็บ</button>' : "") + '<button type="button" class="alt" id="lbSave">💾 บันทึกลงไฟล์</button><button type="button" class="alt" id="lbDl">⬇️ ดาวน์โหลด</button><button type="button" class="alt" id="lbBack">กลับไปใช้ไฟล์บนเว็บ</button>' +
+      (UNDO[k] ? '<button type="button" class="alt" id="lbUndo">↩️ ย้อนกลับ: ' + esc(UNDO[k].label) + "</button>" : "") + "</span>";
+    lb.style.display = "";
+    $("lbBack").onclick = () => $("xlsClear").onclick();
+    $("lbDl").onclick = () => $("xlsDown").onclick();
+    $("lbSave").onclick = () => saveToFolder(k);
+    if ($("lbPush")) $("lbPush").onclick = () => publishToGitHub(k);
+    if ($("lbUndo")) $("lbUndo").onclick = () => undoLast(k);
+  } else if (SYNC_NOTE[k]) {
+    lb.className = "banner local-banner";
+    lb.innerHTML = '<span>🔄 ไฟล์บนเว็บมีการอัปเดต จึงแสดงข้อมูลล่าสุดจากไฟล์แล้ว (ข้อมูลที่เคยเพิ่มค้างในเครื่องนี้ถูกแทนที่)</span>' +
+      '<span class="lb-btns"><button type="button" class="alt" id="lbOk">รับทราบ</button></span>';
+    lb.style.display = "";
+    $("lbOk").onclick = () => { SYNC_NOTE[k] = false; lb.style.display = "none"; };
+  } else lb.style.display = "none";
+}
+/* ---------- ส่งไฟล์ขึ้น GitHub โดยตรง (GitHub Contents API) ---------- */
+const GHC = (window.APP_CONFIG || {}).github || null;
+const GH = GHC && GHC.owner && GHC.repo
+  ? { owner: GHC.owner, repo: GHC.repo, branch: GHC.branch || "main", dir: GHC.dir || "", apiBase: (GHC.apiBase || "https://api.github.com").replace(/\/$/, "") }
+  : null;
+function ghToken() { try { return sessionStorage.getItem("gh_token") || localStorage.getItem("gh_token") || ""; } catch (e) { return ""; } }
+function ghForget() { try { sessionStorage.removeItem("gh_token"); localStorage.removeItem("gh_token"); } catch (e) {} }
+function askToken() {
+  return new Promise(res => {
+    const d = $("ghDlg"); $("ghTok").value = "";
+    let done = false;
+    const fin = v => { if (done) return; done = true; if (d.close) d.close(); else d.removeAttribute("open"); res(v); };
+    $("ghOk").onclick = () => {
+      const t = $("ghTok").value.trim();
+      if (!t) { $("ghTok").focus(); return; }
+      try { if ($("ghRemember").checked) localStorage.setItem("gh_token", t); else sessionStorage.setItem("gh_token", t); } catch (e) {}
+      fin(t);
+    };
+    $("ghNo").onclick = () => fin("");
+    d.onclose = () => fin("");
+    if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+  });
+}
+async function publishToGitHub(k) {
+  if (!GH) { setMsg("ยังไม่ได้ตั้งค่า github ใน config.js"); return; }
+  const wb = WB[k]; if (!wb) return;
+  let tok = ghToken();
+  if (!tok) { tok = await askToken(); if (!tok) return; }
+  const hdr = { Accept: "application/vnd.github+json", Authorization: "Bearer " + tok };
+  const url = GH.apiBase + "/repos/" + encodeURIComponent(GH.owner) + "/" + encodeURIComponent(GH.repo) + "/contents/" + GH.dir.split("/").filter(Boolean).concat(KINDS[k].file).map(encodeURIComponent).join("/");
+  const why = s => s === 401 ? "โทเคนไม่ถูกต้องหรือหมดอายุ (ลองใส่โทเคนใหม่)" : s === 403 ? "โทเคนไม่มีสิทธิ์เขียน (ต้องตั้ง Contents: Read and write)"
+    : s === 404 ? "ไม่พบ repo/ไฟล์ หรือโทเคนไม่มีสิทธิ์เข้าถึง repo นี้" : s === 409 || s === 422 ? "ไฟล์ถูกแก้ไขระหว่างบันทึก ลองกดใหม่อีกครั้ง" : "รหัสข้อผิดพลาด " + s;
+  setMsg("⏳ กำลังส่ง " + KINDS[k].file + " ขึ้น GitHub ...");
+  try {
+    let r = await fetch(url + "?ref=" + encodeURIComponent(GH.branch) + "&t=" + Date.now(), { headers: hdr });
+    let sha;
+    if (r.status === 200) {
+      const j = await r.json(); sha = j.sha;
+      const sv0 = getSaved(k) || {}, base = sv0.pushed || sv0.base;       // ไฟล์บน GitHub ตอนที่เริ่มแก้ (หรือที่เราส่งขึ้นไปล่าสุด)
+      const remote = fingerprint(b64ToBuf(String(j.content || "").replace(/\s/g, "")));
+      if (base && remote !== base && !confirm("ไฟล์ " + KINDS[k].file + " บน GitHub ถูกแก้ไขหลังจากที่คุณเริ่มแก้ข้อมูลนี้ (อาจมีคนอัปเดตไปก่อน)\n\nถ้าส่งขึ้นไป การแก้ไขของคนนั้นจะถูกเขียนทับ\n\nต้องการเขียนทับใช่ไหม?")) { setMsg("ยกเลิกแล้ว (ไม่ได้ส่งขึ้น GitHub)"); return; }
+    } else if (r.status !== 404) throw Object.assign(new Error(why(r.status)), { status: r.status });
+    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    const now = new Date(), stampTxt = now.toLocaleDateString("th-TH") + " " + now.toLocaleTimeString("th-TH");
+    const body = { message: "อัปเดต " + KINDS[k].file + " จากหน้าเว็บ (" + stampTxt + ")", content: bufToB64(out), branch: GH.branch };
+    if (sha) body.sha = sha;
+    r = await fetch(url, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) });
+    if (!r.ok) throw Object.assign(new Error(why(r.status)), { status: r.status });
+    try { const sv = getSaved(k); if (sv) { sv.pushed = fingerprint(out); localStorage.setItem("xls_" + k, JSON.stringify(sv)); } } catch (e) {}
+    setMsg("✅ ส่ง " + KINDS[k].file + " ขึ้น GitHub แล้ว รอ GitHub Pages อัปเดตประมาณ 1-2 นาที แล้วกด Ctrl+F5 (ทุกคนจะเห็นข้อมูลใหม่)");
+  } catch (e) {
+    if (e && e.status === 401) ghForget();
+    setMsg("❌ ส่งขึ้น GitHub ไม่สำเร็จ: " + (e && e.message || "เชื่อมต่อไม่ได้"));
+  }
+}
+
+/* ---------- ย้อนกลับการเปลี่ยนข้อมูลล่าสุด (เก็บสถานะก่อนหน้าไว้ในหน่วยความจำของหน้านี้) ---------- */
+const UNDO = {};
+function makeUndo(k, label) {
+  let prev = null; try { prev = localStorage.getItem("xls_" + k); } catch (e) {}
+  UNDO[k] = { prev, label };
+}
+async function undoLast(k) {
+  const u = UNDO[k]; if (!u) return;
+  try { if (u.prev === null) localStorage.removeItem("xls_" + k); else localStorage.setItem("xls_" + k, u.prev); } catch (e) {}
+  UNDO[k] = null; DATA[k] = null;
+  await setKind(k);
+  setMsg("↩️ ย้อนกลับแล้ว: " + u.label);
+}
+/* หน้าต่างตรวจสอบก่อนรวมข้อมูล */
+function confirmMerge(st, fname) {
+  return new Promise(res => {
+    const d = $("mergeDlg");
+    const names = a => a.slice(0, 6).map(esc).join(", ") + (a.length > 6 ? " และอีก " + (a.length - 6) + " รายการ" : "");
+    let b = '<p class="m-sub">ไฟล์: <b>' + esc(fname) + "</b></p><ul>";
+    if (st.added.length) b += "<li>➕ <b>เพิ่มใหม่ " + st.added.length + " รายการ</b>: " + names(st.added) + "</li>";
+    if (st.updatedNames.length) b += "<li>✏️ <b>อัปเดต " + st.updatedNames.length + " รายการ</b>: " + names(st.updatedNames) + "</li>";
+    if (st.newMonths.length) b += "<li>📅 <b>เดือนใหม่</b>: " + st.newMonths.map(esc).join(", ") + "</li>";
+    if (st.bills) b += "<li>🧾 <b>ใบแจ้งค่าบริการ " + st.bills + " ชุด</b> (แทนที่เฉพาะเบอร์และเดือนที่อยู่ในไฟล์นี้)</li>";
+    b += '</ul><p class="m-sub">ข้อมูลเดิมที่ไฟล์นี้ไม่ได้กล่าวถึงจะไม่เปลี่ยน · ถ้ามีรายการ "เพิ่มใหม่" ที่ควรเป็นของเดิม แปลว่ารหัสไม่ตรง ให้ยกเลิกแล้วตรวจไฟล์ · ย้อนกลับได้ภายหลัง</p>';
+    $("mergeBody").innerHTML = b;
+    let done = false;
+    const fin = v => { if (done) return; done = true; if (d.close) d.close(); else d.removeAttribute("open"); res(v); };
+    $("mergeOk").onclick = () => fin(true);
+    $("mergeNo").onclick = () => fin(false);
+    d.onclose = () => fin(false);
+    if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+  });
+}
+
+/* รับไฟล์ Excel (จากปุ่มเลือกไฟล์ หรือจากการลากมาวาง) แล้วใช้ข้อมูลทันที */
+/* =========================================================
+   รวมไฟล์ Excel ใหม่ เข้ากับข้อมูลเดิม (ข้อมูลเก่าไม่หาย)
+   - แถวที่รหัสตรงกัน: อัปเดตเฉพาะช่องที่ไฟล์ใหม่มีข้อมูล (ช่องว่างในไฟล์ใหม่ไม่ลบของเดิม)
+   - แถวใหม่: เพิ่มต่อท้าย  - เดือนใหม่: สร้างคอลัมน์เพิ่มให้
+   - รายละเอียดบิลโทรศัพท์: เบอร์+เดือนที่อยู่ในไฟล์ใหม่ จะแทนที่ของเดิมเฉพาะชุดนั้น
+   ========================================================= */
+function mergeWorkbook(k, base, inc) {
+  const cols = KINDS[k].cols;
+  const stats = { added: [], updated: 0, updatedNames: [], newMonths: [] };
+  const sn = base.SheetNames[0], ws = base.Sheets[sn];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+  const merges = (ws["!merges"] || []).map(m => ({ s: { ...m.s }, e: { ...m.e } }));
+  const hr = aoa.findIndex(r => text(r[0]) === "ลำดับ");
+  if (hr < 0) throw new Error("ไม่พบแถวหัวตารางในข้อมูลเดิม");
+  if (!aoa[hr + 1]) aoa[hr + 1] = [];
+  let width = Math.max(...aoa.slice(0, hr + 2).map(r => r.length));
+  const pad = () => aoa.forEach(r => { while (r.length < width) r.push(""); });
+  pad();
+  const find = (row, n) => n ? row.findIndex(c => text(c) === n) : -1;
+  const bName = find(aoa[hr], cols.name), bK1 = find(aoa[hr], cols.key1), bK2 = find(aoa[hr], cols.key2), bEx = find(aoa[hr], cols.extra);
+  if (bK1 < 0) throw new Error("ข้อมูลเดิมไม่มีคอลัมน์ " + cols.key1);
+  let groups = groupsOf(aoa[hr], aoa[hr + 1], width);
+
+  const isheet = inc.Sheets[inc.SheetNames[0]];
+  const iaoa = XLSX.utils.sheet_to_json(isheet, { header: 1, raw: true, defval: "" });
+  const ihr = iaoa.findIndex(r => text(r[0]) === "ลำดับ");
+  if (ihr < 0) throw new Error("ไม่พบแถวหัวตาราง (คอลัมน์ A ต้องมีคำว่า ลำดับ) ในไฟล์ใหม่");
+  const iwidth = Math.max(...iaoa.slice(0, ihr + 2).map(r => r.length), 0);
+  const iK1 = find(iaoa[ihr], cols.key1);
+  if (iK1 < 0) throw new Error("ไฟล์ใหม่ไม่มีคอลัมน์ " + cols.key1 + " (หัวคอลัมน์ต้องเหมือนไฟล์ตัวอย่าง)");
+  const iName = find(iaoa[ihr], cols.name), iK2 = find(iaoa[ihr], cols.key2), iEx = find(iaoa[ihr], cols.extra);
+  const igroups = groupsOf(iaoa[ihr], iaoa[ihr + 1] || [], iwidth);
+
+  // เดือนที่ไฟล์ใหม่มีแต่ของเดิมไม่มี: สร้างกลุ่มคอลัมน์ใหม่ต่อท้าย
+  igroups.forEach(ig => {
+    if (groups.find(g => g.month === ig.month)) return;
+    const last = groups[groups.length - 1], w = width - last.amt, s = width;
+    width += w; pad();
+    for (let i = 0; i < w; i++) aoa[hr + 1][s + i] = aoa[hr + 1][last.amt + i];
+    aoa[hr][s] = ig.month;
+    if (w > 1) merges.push({ s: { r: hr, c: s }, e: { r: hr, c: s + w - 1 } });
+    groups = groupsOf(aoa[hr], aoa[hr + 1], width);
+    stats.newMonths.push(ig.month);
+  });
+
+  // ดัชนีแถวเดิมตามรหัส
+  const index = {}; let count = 0, firstEmpty = -1;
+  for (let i = hr + 2; i < aoa.length; i++) {
+    const key = keyOf(k, aoa[i][bK1]);
+    if (key) { (index[key] = index[key] || []).push(i); count++; } else if (firstEmpty < 0) firstEmpty = i;
+  }
+  const put = (row, c, v) => { if (c >= 0 && text(v) !== "" && text(row[c]) !== text(v)) { row[c] = v; return true; } return false; };   // true = ค่าเปลี่ยนจริง
+
+  for (let i = ihr + 2; i < iaoa.length; i++) {
+    const ir = iaoa[i], key = keyOf(k, ir[iK1]);
+    if (!key) continue;
+    const cands = index[key];
+    let ri, isNew = !cands;
+    if (!isNew) {                                     // รหัสซ้ำกันหลายแถว: เลือกแถวที่ชื่อตรง → รหัสลูกค้าตรง → แถวแรก
+      const nm = norm(iName >= 0 ? ir[iName] : ""), k2 = norm(iK2 >= 0 ? ir[iK2] : "");
+      ri = cands.find(j => nm && bName >= 0 && norm(aoa[j][bName]) === nm);
+      if (ri === undefined) ri = cands.find(j => k2 && bK2 >= 0 && norm(aoa[j][bK2]) === k2);
+      if (ri === undefined) ri = cands[0];
+    } else {
+      ri = firstEmpty >= 0 ? firstEmpty : aoa.length;
+      if (ri >= aoa.length) aoa.push(new Array(width).fill(""));
+      firstEmpty = -1; for (let j = ri + 1; j < aoa.length; j++) if (!keyOf(k, aoa[j][bK1])) { firstEmpty = j; break; }
+      aoa[ri][0] = String(++count);
+      aoa[ri][bK1] = ir[iK1];
+      index[key] = [ri];
+    }
+    const row = aoa[ri];
+    let touched = isNew;
+    touched = put(row, bName, iName >= 0 ? ir[iName] : "") || touched;
+    touched = put(row, bK2, iK2 >= 0 ? ir[iK2] : "") || touched;
+    touched = put(row, bEx, iEx >= 0 ? ir[iEx] : "") || touched;
+    igroups.forEach(ig => {
+      const bg = groups.find(g => g.month === ig.month);
+      const a = ir[ig.amt], d = ig.due >= 0 ? ir[ig.due] : "", p = ig.per >= 0 ? ir[ig.per] : "";
+      touched = put(row, bg.amt, a) || touched;
+      touched = put(row, bg.due, d) || touched;
+      touched = put(row, bg.per, p) || touched;
+    });
+    const label = text(iName >= 0 ? ir[iName] : "") || text(row[bName]) || text(ir[iK1]);
+    if (isNew) stats.added.push(label); else if (touched) { stats.updated++; stats.updatedNames.push(label); }
+  }
+  const nws = XLSX.utils.aoa_to_sheet(aoa);
+  nws["!merges"] = merges;
+  if (ws["!cols"]) nws["!cols"] = ws["!cols"];
+  base.Sheets[sn] = nws;
+
+  // รายละเอียดบิลโทรศัพท์
+  if (k === "phone") {
+    const inName = inc.SheetNames.find(n => n.includes("รายละเอียด"));
+    if (inName) {
+      const irows = XLSX.utils.sheet_to_json(inc.Sheets[inName], { header: 1, raw: true, defval: "" });
+      const ih = irows.findIndex(r => text(r[0]) === "หมายเลขโทรศัพท์");
+      const inBody = (ih >= 0 ? irows.slice(ih + 1) : []).filter(r => r.some(c => text(c) !== ""));
+      if (inBody.length) {
+        const bn = base.SheetNames.find(n => n.includes("รายละเอียด")) || "รายละเอียดบิล";
+        const head = ["หมายเลขโทรศัพท์", "เดือน", "ชนิดแถว", "รายการ", "ปริมาณ", "จำนวนเงิน"];
+        let rows = base.Sheets[bn] ? XLSX.utils.sheet_to_json(base.Sheets[bn], { header: 1, raw: true, defval: "" }) : [];
+        const bh = rows.findIndex(r => text(r[0]) === "หมายเลขโทรศัพท์");
+        let body = (bh >= 0 ? rows.slice(bh + 1) : []).filter(r => r.some(c => text(c) !== ""));
+        const pairs = new Set(inBody.map(r => keyOf("phone", r[0]) + "|" + text(r[1])));
+        body = body.filter(r => !pairs.has(keyOf("phone", r[0]) + "|" + text(r[1])));
+        const bws = XLSX.utils.aoa_to_sheet([head, ...body, ...inBody]);
+        bws["!cols"] = [{ wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 46 }, { wch: 14 }, { wch: 14 }];
+        if (!base.Sheets[bn]) base.SheetNames.splice(1, 0, bn);
+        base.Sheets[bn] = bws;
+        stats.bills = pairs.size;
+      }
+    }
+  }
+  return stats;
+}
+
+async function takeFile(f, k) {
+  const prevData = DATA[k], prevWB = WB[k];
+  try {
+    const merge = $("upMerge").checked;
+    const buf = await f.arrayBuffer();
+    let out = buf, note = "";
+    if (merge) {
+      await ensureLoaded(k);
+      if (!WB[k] || !(DATA[k] || []).length) { loadWorkbook(k, buf); }               // ยังไม่มีข้อมูลเดิม: ใช้ไฟล์ใหม่ตรงๆ
+      else {
+        const inc = XLSX.read(buf, { type: "array" });
+        const rows = XLSX.utils.sheet_to_json(inc.Sheets[inc.SheetNames[0]], { header: 1, raw: true, defval: "" });
+        if (!parseSheet(rows, KINDS[k].cols).length) throw new Error("ไม่พบข้อมูลในไฟล์ใหม่ (ตรวจหัวคอลัมน์ให้ตรงกับไฟล์ตัวอย่าง " + KINDS[k].file + ")");
+        const clone = XLSX.read(XLSX.write(WB[k], { type: "array", bookType: "xlsx" }), { type: "array" });   // ลองรวมบนสำเนาก่อน
+        const st = mergeWorkbook(k, clone, inc);
+        if (!st.added.length && !st.updatedNames.length && !st.newMonths.length && !st.bills)
+          return "ℹ️ ไฟล์ " + f.name + " ไม่มีข้อมูลที่ต่างจากเดิม จึงไม่มีอะไรเปลี่ยน";
+        if (!(await confirmMerge(st, f.name))) return "ยกเลิกการรวมข้อมูลแล้ว (ข้อมูลไม่เปลี่ยน)";
+        makeUndo(k, "รวมไฟล์ " + f.name);
+        out = XLSX.write(clone, { type: "array", bookType: "xlsx" });
+        loadWorkbook(k, out);
+        note = "รวมกับข้อมูลเดิมแล้ว: เพิ่มใหม่ " + st.added.length + " รายการ" + (st.added.length && st.added.length <= 3 ? " (" + st.added.join(", ") + ")" : "") +
+               " · อัปเดต " + st.updated + " รายการ" + (st.newMonths.length ? " · เดือนใหม่: " + st.newMonths.join(", ") : "") + (st.bills ? " · ใบแจ้งค่าบริการ " + st.bills + " ชุด" : "");
+      }
+    } else {
+      if (!confirm("แทนที่ข้อมูลทั้งหมดด้วยไฟล์ " + f.name + " ใช่ไหม?\n(ข้อมูลเดิมในหน้านี้จะถูกแทนที่ ย้อนกลับได้ภายหลัง)")) return "ยกเลิกแล้ว (ข้อมูลไม่เปลี่ยน)";
+      makeUndo(k, "แทนที่ด้วยไฟล์ " + f.name);
+      loadWorkbook(k, buf);
+    }
+    const kept = await saveOverride(k, out, merge ? "ข้อมูลเดิม + " + f.name : f.name);
+    await setKind(k);
+    return "✅ " + (note || "ใช้ข้อมูลจาก " + f.name + " แทนที่ทั้งหมดแล้ว") + " (ทั้งหมด " + ITEMS().length + " รายการ)" + (kept ? "" : " · เก็บถาวรไม่ได้ จะหายเมื่อรีเฟรช");
+  } catch (e) {
+    DATA[k] = prevData; WB[k] = prevWB;
+    return "❌ อ่านไฟล์ไม่ได้: " + (e && e.message || "error");
+  }
+}
+$("xlsFile").onchange = async () => {
+  const f = $("xlsFile").files[0]; if (!f) return;
+  $("upStatus").textContent = await takeFile(f, $("kindSel").value);
+  $("xlsFile").value = "";
+};
+
+/* ลากไฟล์ .xlsx มาวางบนหน้าเว็บ = อัปเดตทันที (ชื่อไฟล์มี phone = โทรศัพท์ มี data = อินเทอร์เน็ต) */
+let dragDepth = 0;
+const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+document.addEventListener("dragenter", e => { if (hasFiles(e)) { dragDepth++; document.body.classList.add("dropping"); } });
+document.addEventListener("dragleave", e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dropping"); } });
+document.addEventListener("dragover", e => { if (hasFiles(e)) e.preventDefault(); });
+document.addEventListener("drop", async e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dropping");
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  if (!/\.xlsx?$/i.test(f.name)) { setMsg("วางได้เฉพาะไฟล์ Excel (.xlsx)"); return; }
+  const cur = $("kindSel").value, k = /phone|โทร/i.test(f.name) ? "phone" : /data/i.test(f.name) ? "net" : cur;
+  const msg = await takeFile(f, k);
+  $("upStatus").textContent = msg; setMsg(msg);
+});
+
+/* บันทึกข้อมูลลงไฟล์จริงในโฟลเดอร์ (Chrome/Edge): เลือกไฟล์เดิมเพื่อเขียนทับ */
+async function saveToFolder(k) {
+  const wb = WB[k];
+  if (!wb) return;
+  if (!window.showSaveFilePicker) { setMsg("เบราว์เซอร์นี้บันทึกลงไฟล์โดยตรงไม่ได้ (ใช้ Chrome หรือ Edge) ให้กดดาวน์โหลดแล้ววางทับไฟล์แทน"); return; }
+  let out;
+  try {
+    const handle = await showSaveFilePicker({ suggestedName: KINDS[k].file,
+      types: [{ description: "ไฟล์ Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+    out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    const w = await handle.createWritable(); await w.write(out); await w.close();
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    setMsg("บันทึกลงไฟล์ไม่สำเร็จ: " + (e && e.message || e)); return;
+  }
+  let same = false;                                  // เว็บอ่านไฟล์ที่เพิ่งเขียนได้แล้วหรือยัง
+  try { await fetchServer(k); same = SERVER_FP[k] === fingerprint(out); } catch (e) {}
+  if (same) {
+    removeSaved(k); SYNC_NOTE[k] = false; DATA[k] = null;
+    await setKind(k);
+    setMsg("✅ บันทึกลงไฟล์แล้ว เว็บใช้ไฟล์ล่าสุดแล้ว");
+  } else {
+    setMsg("✅ บันทึกลงไฟล์แล้ว แต่เว็บนี้อ่านไฟล์จากที่อื่น (เช่นเว็บออนไลน์) ให้อัปโหลดไฟล์ขึ้นเว็บด้วย ตอนนี้จึงยังแสดงข้อมูลที่เก็บในเครื่องนี้");
+  }
+}
+$("xlsClear").onclick = async () => {
+  const k = $("kindSel").value;
+  if (getSaved(k) && !confirm("ข้อมูลที่อัปโหลด/เพิ่มไว้ในเครื่องนี้ยังไม่ได้อยู่ในไฟล์บนเว็บ\nถ้ากลับไปใช้ไฟล์บนเว็บ ข้อมูลนั้นจะหายไป\n\n(แนะนำให้กด \"ดาวน์โหลด\" เก็บไว้ก่อน)\n\nต้องการกลับไปใช้ไฟล์บนเว็บใช่ไหม?")) return;
+  removeSaved(k);
+  SYNC_NOTE[k] = false;
+  DATA[k] = null;
+  await setKind(k);
+};
+
+$("kindSel").onchange = () => {
+  try { localStorage.setItem("pick_kind", $("kindSel").value); } catch (e) {}   // จำเรื่องที่เบิกล่าสุด
+  setKind($("kindSel").value);
+};
+
+/* =========================================================
+   4. แปลงตัวเลขเป็นตัวอักษรไทย (บาท)
+   ========================================================= */
+const DIGITS = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+const UNITS  = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน"];
+
+function thaiNumber(n) {
+  if (n === 0) return "";
+  if (n >= 1e6) return thaiNumber(Math.floor(n / 1e6)) + "ล้าน" + thaiNumber(n % 1e6);
+  const s = String(n);
+  let r = "";
+  for (let i = 0; i < s.length; i++) {
+    const d = +s[i], p = s.length - i - 1;
+    if (!d) continue;
+    if (p === 1)      r += (d === 1 ? "" : d === 2 ? "ยี่" : DIGITS[d]) + "สิบ";
+    else if (p === 0) r += (d === 1 && s.length > 1 ? "เอ็ด" : DIGITS[d]);
+    else              r += DIGITS[d] + UNITS[p];
+  }
+  return r;
+}
+
+function bahtText(a, full) {
+  const b = Math.floor(a);
+  const s = Math.round((a - b) * 100);
+  return thaiNumber(b) + "บาท" + (s ? thaiNumber(s) + "สตางค์" : (full ? "ถ้วน" : ""));
+}
+
+/* =========================================================
+   4.1 รายชื่อผู้จัดทำ / ผู้อนุมัติ (เลือกจากรายการ ไม่ต้องพิมพ์)
+   !! เพิ่ม/แก้รายชื่อที่นี่: บรรทัดละ 1 คน { name: "ชื่อ", pos: "ตำแหน่ง" }
+   ========================================================= */
+const SIGNERS = {
+  makers: [
+    { name: "นางสาวเสาวลักษณ์ ปิยไพร",     pos: "เจ้าหน้าที่รัฐกิจสัมพันธ์" },
+    { name: "นางสาวเพชรรัตน์ มะโนนิน",     pos: "เจ้าหน้าที่บริหารงาน GPS." }
+  ],
+  approvers: [
+    { name: "นายเมธี จันทร์งาม",           pos: "รักษาการผู้จัดการส่วนรัฐกิจและหลักทรัพย์" },
+    { name: "นางโสภิดา คำอินทร์",           pos: "ผู้จัดการส่วนสำนักงานจัดหาวัตถุดิบ" }
+  ]
+};
+
+function setupPicker(selId, posId, list, storeKey) {
+  const sel = $(selId);
+  list.forEach((p, i) => {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = p.name;
+    sel.appendChild(o);
+  });
+  let saved = 0;                                          // จำคนที่เลือกล่าสุดในเครื่องนี้
+  try { saved = +localStorage.getItem(storeKey) || 0; } catch (e) {}
+  sel.value = list[saved] ? saved : 0;
+  const update = () => {
+    $(posId).textContent = "ตำแหน่ง: " + list[sel.value].pos;
+    try { localStorage.setItem(storeKey, sel.value); } catch (e) {}
+  };
+  sel.onchange = update;
+  update();
+}
+setupPicker("makerSel", "makerPosTxt", SIGNERS.makers, "pick_maker2");
+setupPicker("apprSel", "apprPosTxt", SIGNERS.approvers, "pick_appr2");
+
+/* รอให้ฟอนต์โหลดก่อนสั่งพิมพ์ (กันตัวอักษรเพี้ยนในหน้าตัวอย่าง) */
+function printNow() {
+  const load = w => document.fonts ? document.fonts.load(w + ' 12pt "Sarabun"', "กขA1") : Promise.resolve();
+  Promise.all([load(400), load(700)]).catch(() => {}).then(() => window.print());
+}
+
+/* =========================================================
+   5. พิมพ์ใบรายงานการขอเบิกค่าใช้จ่าย
+   ========================================================= */
+$("printBtn").onclick = () => {
+  if (!current) return;
+  document.body.dataset.print = "report";
+  $("fPeriod").textContent   = $("period").value;
+  $("fName").textContent     = (current.name.startsWith("ศูนย์") ? "" : " ") + current.name;
+  $("fAmt").textContent      = fmt(current.amt);
+  $("fAmt2").textContent     = fmt(current.amt);
+  $("fWords").textContent    = bahtText(current.amt);
+  const mk = SIGNERS.makers[$("makerSel").value], ap = SIGNERS.approvers[$("apprSel").value];
+  $("fMaker").textContent    = "(" + mk.name + ")";
+  $("fMakerPos").textContent = "(" + mk.pos + ")";
+  $("fAppr").textContent     = "(" + ap.name + ")";
+  $("fApprPos").textContent  = "(" + ap.pos + ")";
+  printNow();
+};
+
+/* =========================================================
+   5.1 บันทึกภายใน (แบบฟอร์ม FM-50000-02)
+   ข้อความของแต่ละเรื่อง (อินเตอร์เน็ต / โทรศัพท์) แก้ได้ที่ KINDS[...].memo ด้านบน
+   ข้อความที่ใช้ร่วมกันแก้ได้ที่ MEMO
+   ========================================================= */
+const MEMO = {
+  from: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์",
+  to:   "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
+  form: "FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566"
+};
+const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+                     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+function thaiLongDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  return m ? (+m[3]) + " " + THAI_MONTHS[+m[2] - 1] + " " + (+m[1] + 543) : "";
+}
+(() => { const d = new Date(); $("memoDate").value = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); })();
+
+function memoTable(cfg, c, amt, year) {
+  const n = cfg.cols.length;
+  let h = "<colgroup>" + cfg.widths.map(w => '<col style="width:' + w + '%">').join("") + "</colgroup>";
+  h += '<tr><th colspan="' + (n - cfg.monthSpan) + '">' + esc(cfg.tableTitle + " " + year) + '</th>' +
+       '<th colspan="' + cfg.monthSpan + '">' + esc(c.month) + "</th></tr>";
+  h += "<tr>" + cfg.cols.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr>";
+  h += "<tr>" + cfg.cells(c, amt).map(x => "<td>" + esc(x) + "</td>").join("") + "</tr>";
+  if (cfg.total) h += '<tr><th colspan="' + (n - 2) + '">รวม</th><td colspan="2">' + esc(amt) + "</td></tr>";
+  return h;
+}
+
+$("printMemo").onclick = () => {
+  if (!current) return;
+  document.body.dataset.print = "memo";
+  const cfg = K().memo;
+  const mk = SIGNERS.makers[$("makerSel").value], ap = SIGNERS.approvers[$("apprSel").value];
+  const year = current.due.split("/")[2] || "";
+  const amt = fmt(current.amt);
+
+  $("mDate").textContent    = thaiLongDate($("memoDate").value);
+  $("mSubject").innerHTML   = "<div>" + cfg.subject(current) + "</div>";
+  $("mFrom").textContent    = MEMO.from;
+  $("mTo").textContent      = MEMO.to;
+  $("mFor").textContent     = cfg.purpose;
+  $("mIntro").textContent   = cfg.intro;
+  $("mmTb").innerHTML       = memoTable(cfg, current, amt, year);
+  $("mPara").innerHTML      = esc(MEMO.from) + " ขอเบิกค่าใช้บริการ" + esc(cfg.word) + " จำนวน 1 เลขหมาย รอบค่าใช้บริการ <b>เดือน " +
+                              esc(current.month) + " " + esc(year) + "</b> เป็นจำนวนเงินทั้งสิ้น <b>" + amt + " บาท</b> <b>(" +
+                              bahtText(current.amt, true) + ")</b> ตามเอกสารที่แนบท้ายนี้";
+  $("mClose").textContent   = cfg.close;
+  $("mMaker").textContent   = "(" + mk.name + ")";
+  $("mMakerPos").textContent = mk.pos;
+  $("mAppr").textContent    = "(" + ap.name + ")";
+  $("mApprPos").textContent = ap.pos;
+  $("mFoot").textContent    = MEMO.form;
+  printNow();
+};
+
+/* =========================================================
+   6. บทบาทและการอนุมัติ: ผู้อนุมัติ 1, ผู้อนุมัติ 2, บัญชี
+   !! แก้ชื่อ / ตำแหน่งของแต่ละคนที่ ROLES ด้านล่าง ส่วน PIN ตั้งใน config.js (โหมดในเครื่อง)
+      หรือใน Script Properties ของ Apps Script (ระบบกลาง ปลอดภัยกว่า PIN ไม่อยู่ในโค้ดหน้าเว็บ)
+   ระบบกลาง: สถานะอนุมัติเก็บใน Google Sheet ทุกเครื่องเห็นตรงกัน
+   โหมดในเครื่อง: สถานะเก็บในเบราว์เซอร์ของเครื่องที่กด (ไม่ซิงก์ข้ามเครื่อง)
+   ========================================================= */
+const ROLES = {
+  approver1:  { label: "ผู้อนุมัติ 1", name: "นางโสภิดา คำอินทร์", pos: "ผู้จัดการส่วนสำนักงานจัดหาวัตถุดิบ" },
+  approver2:  { label: "ผู้อนุมัติ 2", name: "ชื่อผู้อนุมัติ 2", pos: "ตำแหน่งผู้อนุมัติ 2" },
+  accountant: { label: "บัญชี",        name: "ชื่อเจ้าหน้าที่บัญชี", pos: "เจ้าหน้าที่บัญชี" }
+};
+const ROLE_ORDER = ["approver1", "approver2", "accountant"];
+
+/* โหมดทำงาน: ถ้าตั้ง cloudUrl ใน config.js = ระบบกลาง (PIN ตรวจที่เซิร์ฟเวอร์ สถานะตรงกันทุกเครื่อง)
+   ถ้าเว้นว่าง = โหมดในเครื่อง (PIN จาก config.js และสถานะเก็บในเบราว์เซอร์นี้) */
+const CFG = window.APP_CONFIG || {};
+const CLOUD = String(CFG.cloudUrl || "").trim();
+let cloudOnline = false;
+
+let role = null, token = null;
+try { role = sessionStorage.getItem("role"); token = sessionStorage.getItem("token"); } catch (e) { /* ไม่มี sessionStorage */ }
+if (!ROLES[role] || (CLOUD && !token)) { role = null; token = null; }
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const stamp = iso => iso ? new Date(iso).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "";
+
+let CLOUD_APPR = {};
+if (CLOUD) { try { CLOUD_APPR = JSON.parse(localStorage.getItem("approvals_cloud") || "{}"); } catch (e) {} }
+
+function loadApprovals() {
+  if (CLOUD) return CLOUD_APPR;
+  try { return JSON.parse(localStorage.getItem("approvals_v1") || "{}"); } catch (e) { return {}; }
+}
+function saveApprovals(a) {
+  try { localStorage.setItem("approvals_v1", JSON.stringify(a)); }
+  catch (e) { setMsg("บันทึกสถานะไม่ได้ (เบราว์เซอร์ปิดการเก็บข้อมูล)"); }
+}
+const recKey = d => d.acc + "|" + d.due;                    // 1 รายการ = ศูนย์ + กำหนดชำระ
+const getRec = d => loadApprovals()[recKey(d)] || {};
+function setRec(d, patch) {                                  // โหมดในเครื่อง
+  const a = loadApprovals();
+  a[recKey(d)] = Object.assign({}, a[recKey(d)], patch);
+  saveApprovals(a);
+}
+
+/* ---------- ติดต่อระบบกลาง (Google Apps Script) ---------- */
+async function cloudPost(payload) {
+  const res = await fetch(CLOUD, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) });
+  return res.json();
+}
+const CLOUD_ERR = {
+  pin: "บทบาทหรือ PIN ไม่ถูกต้อง", locked: "ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว ลองใหม่ใน 10 นาที",
+  auth: "หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่", forbidden: "ไม่มีสิทธิ์ทำรายการนี้",
+  need_both: "ต้องรอผู้อนุมัติครบ 2 คนก่อน", paid_locked: "บัญชีบันทึกจ่ายแล้ว จึงยกเลิกการอนุมัติไม่ได้"
+};
+async function refreshApprovals() {
+  if (!CLOUD) return;
+  try {
+    const res = await fetch(CLOUD + (CLOUD.includes("?") ? "&" : "?") + "action=approvals&t=" + Date.now());
+    const j = await res.json();
+    if (j && j.ok) {
+      CLOUD_APPR = j.approvals || {}; cloudOnline = true;
+      try { localStorage.setItem("approvals_cloud", JSON.stringify(CLOUD_APPR)); } catch (e) {}
+    } else cloudOnline = false;
+  } catch (e) { cloudOnline = false; }
+  if (current) renderApproval();
+}
+
+/* ---------- เข้าสู่ระบบ ---------- */
+ROLE_ORDER.forEach(k => {
+  const o = document.createElement("option");
+  o.value = k; o.textContent = ROLES[k].label;
+  $("roleSel").appendChild(o);
+});
+
+function renderLogin() {
+  $("loginBox").style.display = role ? "none" : "block";
+  $("whoBox").style.display   = role ? "flex" : "none";
+  if (role) $("whoName").textContent = ROLES[role].label;
+  renderApproval();
+}
+function doLogout(msg) {
+  role = null; token = null;
+  try { sessionStorage.removeItem("role"); sessionStorage.removeItem("token"); } catch (e) {}
+  if (msg) setMsg(msg);
+  renderLogin();
+}
+
+$("loginBtn").onclick = async () => {
+  const r = $("roleSel").value, pin = $("pinIn").value;
+  if (!r || !pin) { setMsg("เลือกบทบาทและใส่ PIN"); return; }
+  if (CLOUD) {
+    $("loginBtn").disabled = true;
+    try {
+      const j = await cloudPost({ action: "login", role: r, pin: pin });
+      if (!j.ok) { setMsg(CLOUD_ERR[j.error] || "เข้าสู่ระบบไม่สำเร็จ"); return; }
+      token = j.token;
+      try { sessionStorage.setItem("token", token); } catch (e) {}
+    } catch (e) { setMsg("เชื่อมต่อระบบกลางไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่"); return; }
+    finally { $("loginBtn").disabled = false; }
+  } else {
+    const pins = CFG.localPins || {};
+    if (!pins[r] || pin !== String(pins[r])) { setMsg("บทบาทหรือ PIN ไม่ถูกต้อง"); return; }
+  }
+  role = r;
+  try { sessionStorage.setItem("role", r); } catch (e) {}
+  $("pinIn").value = "";
+  setMsg("");
+  renderLogin();
+  refreshApprovals();
+};
+$("pinIn").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+$("logoutBtn").onclick = () => doLogout();
+
+/* ---------- แผงสถานะการอนุมัติ ---------- */
+function renderApproval() {
+  if (!current) return;
+  const rec = getRec(current);
+  const both = !!(rec.approver1 && rec.approver2);
+
+  $("apprGrid").innerHTML = ROLE_ORDER.map(k => {
+    const done = rec[k];
+    const isAcc = k === "accountant";
+    const state = done
+      ? (isAcc ? "💰 จ่ายแล้ว " : "✅ อนุมัติแล้ว ") + stamp(done)
+      : "⏳ รอ" + (isAcc ? "จ่ายเงิน" : "อนุมัติ");
+    return '<div class="appr-row' + (done ? " ok" : "") + '"><span>' +
+           esc(ROLES[k].label) + "</span><b>" + state + "</b></div>";
+  }).join("");
+
+  const box = $("apprActions");
+  box.innerHTML = "";
+  const addBtn = (text, cls, fn) => {
+    const b = document.createElement("button");
+    b.textContent = text; if (cls) b.className = cls; b.onclick = fn;
+    box.appendChild(b);
+  };
+  const addNote = (text, cls) => {
+    const p = document.createElement("div");
+    p.className = "appr-note" + (cls ? " " + cls : ""); p.textContent = text;
+    box.appendChild(p);
+  };
+  const modeNote = () => addNote(
+    !CLOUD ? "โหมดทดลอง: สถานะเก็บในเครื่องนี้เท่านั้น (คนอื่นไม่เห็น)"
+           : cloudOnline ? "🔒 ระบบกลาง: ทุกเครื่องเห็นสถานะเดียวกัน"
+                         : "⚠️ เชื่อมระบบกลางไม่ได้ในขณะนี้ แสดงสถานะล่าสุดที่เคยโหลดไว้", "appr-mode");
+
+  const act = patch => async () => {
+    const field = Object.keys(patch)[0], on = patch[field] !== null;
+    if (!CLOUD) { setRec(current, patch); renderApproval(); return; }
+    try {
+      const j = await cloudPost({ action: "approve", token: token, key: recKey(current), field: field, value: on });
+      if (j.ok) { CLOUD_APPR[recKey(current)] = j.record; cloudOnline = true; try { localStorage.setItem("approvals_cloud", JSON.stringify(CLOUD_APPR)); } catch (e) {} }
+      else if (j.error === "auth") { doLogout(CLOUD_ERR.auth); return; }
+      else setMsg(CLOUD_ERR[j.error] || "บันทึกไม่สำเร็จ");
+    } catch (e) { setMsg("เชื่อมต่อระบบกลางไม่ได้ ยังไม่ได้บันทึก ลองใหม่อีกครั้ง"); }
+    await refreshApprovals();
+    renderApproval();
+  };
+
+  if (!role) { addNote("เข้าสู่ระบบด้านบน เพื่ออนุมัติหรือบันทึกการจ่ายเงิน"); modeNote(); return; }
+
+  if (role === "accountant") {
+    if (rec.accountant)  addBtn("ยกเลิกสถานะจ่ายแล้ว", "alt", act({ accountant: null }));
+    else if (both)       addBtn("💰 บันทึกว่าจ่ายแล้ว", "", act({ accountant: new Date().toISOString() }));
+    else                 addNote("ต้องรอผู้อนุมัติครบ 2 คนก่อน จึงบันทึกการจ่ายได้");
+  } else if (rec[role]) {
+    if (rec.accountant)  addNote("บัญชีบันทึกจ่ายแล้ว จึงยกเลิกการอนุมัติไม่ได้");
+    else                 addBtn("ยกเลิกการอนุมัติของฉัน", "alt", act({ [role]: null }));
+  } else {
+    addBtn("✅ อนุมัติรายการนี้", "", act({ [role]: new Date().toISOString() }));
+  }
+  modeNote();
+}
+
+if (CLOUD) {
+  refreshApprovals();
+  setInterval(refreshApprovals, 30000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshApprovals(); });
+}
+
+renderLogin();
+
+(async () => {
+  let k0 = "net";
+  try { if (localStorage.getItem("pick_kind") === "phone") k0 = "phone"; } catch (e) {}
+  await setKind(k0);
+  const acc = new URLSearchParams(location.search).get("acc");   // เปิดผ่านลิงก์ ?acc=รหัสลูกค้า ได้
+  if (acc) { $("accIn").value = acc; lookupNet("accIn"); }
+})();
+</script>
+</body>
+</html>
